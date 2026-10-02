@@ -186,6 +186,26 @@ def _brief_results(results: list[SearchResult], chars: int = 600) -> list[dict]:
     return [{"title": r.title, "url": r.url, "content": r.content[:chars]} for r in results]
 
 
+# Pages dedicated to one business that suggest it is currently trading: a map pin, its own social or review page.
+PRESENCE_HOSTS = ("maps.apple.com", "google.com/maps", "maps.google.", "facebook.com", "instagram.com", "yelp.", "tripadvisor.", "tiktok.com")
+
+
+def _presence(name: str, results: list[SearchResult]) -> str:
+    """URL of a page dedicated to this business (own website, map listing or social profile), or empty.
+
+    Aggregator directories alone are not enough: they often keep businesses that have closed.
+    """
+    flat_name = _flat(name)
+    words = [w for w in flat_name.split() if len(w) >= 4]
+    for r in results:
+        host = (urlparse(r.url).hostname or "").lower()
+        if any(h in r.url.lower() for h in PRESENCE_HOSTS) and flat_name in _flat(r.title):
+            return r.url
+        if not _is_directory(r.url) and words and any(w in host for w in words):
+            return r.url
+    return ""
+
+
 class _Found(BaseModel):
     name: str
     source_url: str = ""
@@ -236,7 +256,8 @@ def discover(offer: OfferProfile) -> HuntResult:
     """Hunt Mode: find businesses matching the offer, then verify each one with its own search.
 
     A business is accepted only if it is named in a retrieved result, is the target type, is not a chain branch,
-    and its own search results place it in the target location. Rejected businesses are returned with the reason.
+    its own search results place it in the target location, and it has a page of its own (website, map listing
+    or social profile) rather than only directory entries. Rejected businesses are returned with the reason.
     Accepted businesses without their own website come first.
     """
     if not config.search_available() or not config.llm_available():
@@ -314,6 +335,11 @@ def discover(offer: OfferProfile) -> HuntResult:
             reason = f"Branch of a large chain, so it already has a corporate website. {ch.reason}"
         elif not located:
             reason = f"Could not confirm it is located in {place}. {ch.reason}"
+        elif not (presence := _presence(c.name, own[_flat(c.name)])):
+            reason = (
+                "Only listed in business directories, which are often out of date. "
+                "No website, map listing or social page of its own was found."
+            )
         else:
             reason = ""
         website = ""
@@ -328,6 +354,7 @@ def discover(offer: OfferProfile) -> HuntResult:
         candidate = Candidate(
             name=c.name, website=website, why=c.why, source_url=source.url,
             location_quote=ch.location_quote.strip() if ch else "", note=reason.strip(),
+            presence_url="" if reason else presence,
         )
         (rejected if reason else kept).append(candidate)
 

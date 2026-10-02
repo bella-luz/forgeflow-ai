@@ -52,9 +52,12 @@ ForgeFlow shows the businesses it found **and checked**. For each one it searche
 - it really is the type of business you asked for,
 - it is located in your city (you see the address it found),
 - it is not a branch of a big chain (chains already have corporate websites),
+- it has its own website, map listing or social page (businesses found only in old directories are left out, because they may have closed),
 - whether it already has its own website.
 
 Businesses **without** a website are shown first, because they are the best targets for a website offer. Those that already have one are in a separate, lower-priority section. Businesses that failed a check are listed under **"Left out after checking"** with the reason.
+
+Before you choose, press **Check it on Google Maps** to make sure the shop is really there. Web listings can be out of date.
 
 Press **Select** on the business you want.
 

@@ -254,13 +254,14 @@ def test_discover_verifies_type_location_and_website(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "k")
     broad = [
         {"title": "Phone shops in Estella", "url": "https://dir.example/a",
-         "content": "Movil Rapido, phone shop in Estella. Tienda Sol, Estella. Tienda Luna, Estella. Vodafone, Estella."},
+         "content": "Movil Rapido, phone shop in Estella. Tienda Sol, Estella. Tienda Luna, Estella. Vodafone, Estella. Center Max, Estella."},
         {"title": "Distribuidora Navarra", "url": "https://dir.example/b", "content": "Food distributor in Fontellas, Navarra."},
     ]
     per_business = {
         "Movil Rapido": [{"title": "Movil Rapido", "url": "https://movilrapido.example", "content": "Calle Mayor 3, Estella-Lizarra"}],
         "Tienda Sol": [{"title": "Tienda Sol", "url": "https://x.example", "content": "Tienda Sol, Avenida Costa Blanca, Alicante"}],
-        "Tienda Luna": [{"title": "Luna", "url": "https://facebook.com/luna", "content": "Tienda Luna, Plaza Fueros 1, Estella"}],
+        "Tienda Luna": [{"title": "Tienda Luna | Facebook", "url": "https://facebook.com/luna", "content": "Tienda Luna, Plaza Fueros 1, Estella"}],
+        "Center Max": [{"title": "Center Max - Estella", "url": "https://dir.example/centermax", "content": "Center Max, Calle Mayor 1, Estella"}],
         "Vodafone": [{"title": "Vodafone Estella", "url": "https://vodafone.example", "content": "Vodafone, Calle Mayor 9, Estella"}],
     }
     found = {"candidates": [
@@ -270,6 +271,7 @@ def test_discover_verifies_type_location_and_website(monkeypatch):
         {"name": "Distribuidora Navarra", "source_url": "https://dir.example/b"},
         {"name": "Invented Phones", "source_url": "https://dir.example/a"},
         {"name": "Vodafone", "source_url": "https://dir.example/a"},
+        {"name": "Center Max", "source_url": "https://dir.example/a"},
     ]}
     checks = {"checks": [
         {"name": "Movil Rapido", "is_target_type": True, "in_target_location": True,
@@ -280,6 +282,8 @@ def test_discover_verifies_type_location_and_website(monkeypatch):
          "location_quote": "Plaza Fueros 1, Estella", "own_website": "https://facebook.com/luna"},
         {"name": "Vodafone", "is_target_type": True, "is_chain": True, "in_target_location": True,
          "location_quote": "Calle Mayor 9, Estella", "own_website": ""},
+        {"name": "Center Max", "is_target_type": True, "in_target_location": True,
+         "location_quote": "Calle Mayor 1, Estella", "own_website": ""},
     ]}
 
     def fake_post(url, json=None, **kwargs):
@@ -300,10 +304,11 @@ def test_discover_verifies_type_location_and_website(monkeypatch):
     assert got[0].website == ""  # a Facebook page is not an own website
     assert got[1].website == "https://movilrapido.example"
     assert "Estella" in got[1].location_quote
-    # Tienda Sol: its own results place it in Alicante. Vodafone: chain branch.
+    assert got[0].presence_url == "https://facebook.com/luna"
+    # Tienda Sol: its own results place it in Alicante. Vodafone: chain branch. Center Max: directory listing only.
     notes = {c.name: c.note for c in hunt.rejected}
-    assert set(notes) == {"Tienda Sol", "Vodafone"}
-    assert "located" in notes["Tienda Sol"] and "chain" in notes["Vodafone"]
+    assert set(notes) == {"Tienda Sol", "Vodafone", "Center Max"}
+    assert "located" in notes["Tienda Sol"] and "chain" in notes["Vodafone"] and "directories" in notes["Center Max"]
 
 
 def test_research_keeps_only_public_emails_that_appear_in_results(monkeypatch):

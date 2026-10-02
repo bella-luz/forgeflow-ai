@@ -9,7 +9,9 @@ from pydantic import ValidationError
 
 from forgeflow import config, orchestrator, store
 from forgeflow.agents import AgentError, hunter
-from forgeflow.models import EvidenceItem, OfferProfile, Prospect, WorkflowState
+from urllib.parse import quote_plus
+
+from forgeflow.models import EvidenceItem, HuntResult, OfferProfile, Prospect, WorkflowState
 
 config.load_env()
 st.set_page_config(page_title="ForgeFlow AI", layout="wide")
@@ -152,7 +154,7 @@ def hunt_form() -> None:
                     st.error(str(exc))
 
     hunt = st.session_state.get("candidates")
-    if not hunt:
+    if not isinstance(hunt, HuntResult):  # also discards results saved by an older version of the app
         return
     offer = st.session_state["hunt_offer"]
     candidates = hunt.candidates
@@ -162,7 +164,8 @@ def hunt_form() -> None:
         st.subheader(f"{len(candidates)} potential clients found and checked")
         st.caption(
             "Each business was checked with its own search: right type of business, not a chain branch, located in "
-            "your target area. Choose one and ForgeFlow researches it in depth before building anything."
+            "your target area, and listed on a map, social page or its own website. Web listings can still be out of "
+            "date, so check it on the map before you select it."
         )
     else:
         st.warning(
@@ -191,7 +194,11 @@ def candidate_card(c, offer: OfferProfile, total: int) -> None:
             if c.location_quote:
                 st.caption(f"Location evidence: {plain(c.location_quote)}")
             st.caption(f"Own website: {c.website}" if c.website else "Own website: none found in search (not proof that none exists)")
+            if c.presence_url:
+                st.caption(f"Current listing: {c.presence_url}")
             st.caption(f"Found at: {c.source_url}")
+            maps = "https://www.google.com/maps/search/?api=1&query=" + quote_plus(f"{c.name} {offer.city} {offer.country}")
+            st.markdown(f"[Check it on Google Maps]({maps})")
         if right.button("Select", key=f"pick-{c.name}", use_container_width=True):
             client = Prospect(name=c.name, website=c.website, city=offer.city, country=offer.country)
             note = f"Found {total} potential clients for this offer; {c.name} was selected."

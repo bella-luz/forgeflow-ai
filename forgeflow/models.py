@@ -44,6 +44,7 @@ class Candidate(BaseModel):
     why: str = ""
     source_url: str = ""
     location_quote: str = ""
+    presence_url: str = ""
     note: str = ""
 
 
