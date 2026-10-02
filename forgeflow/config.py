@@ -12,6 +12,8 @@ DEMO_FIXTURE = DATA_DIR / "demo_prospect.json"
 DEMOS_DIR = DATA_DIR / "demos"
 
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+# Smaller model for light steps; each Groq model has its own free-tier token budget.
+DEFAULT_FAST_MODEL = "openai/gpt-oss-20b"
 HTTP_TIMEOUT = 30
 
 

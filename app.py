@@ -144,34 +144,60 @@ def hunt_form() -> None:
         st.session_state.pop("candidates", None)
         offer = make_offer(fields)
         if offer:
-            with st.spinner("Searching for potential clients..."):
+            with st.spinner("Searching and checking each business. This can take up to a minute on the free AI tier..."):
                 try:
                     st.session_state["candidates"] = hunter.discover(offer)
                     st.session_state["hunt_offer"] = offer
                 except AgentError as exc:
                     st.error(str(exc))
 
-    candidates = st.session_state.get("candidates")
-    if not candidates:
+    hunt = st.session_state.get("candidates")
+    if not hunt:
         return
     offer = st.session_state["hunt_offer"]
-    st.subheader(f"{len(candidates)} potential clients found")
-    st.caption("Choose one. ForgeFlow then researches it in depth before building anything.")
-    for i, c in enumerate(candidates):
-        with st.container(border=True):
-            left, right = st.columns([5, 1])
-            with left:
-                st.markdown(f"**{plain(c.name)}**")
-                st.markdown(plain(c.why))
-                if c.website:
-                    st.caption(f"Website: {c.website}")
+    candidates = hunt.candidates
+    no_site = [c for c in candidates if not c.website]
+    with_site = [c for c in candidates if c.website]
+    if candidates:
+        st.subheader(f"{len(candidates)} potential clients found and checked")
+        st.caption(
+            "Each business was checked with its own search: right type of business, not a chain branch, located in "
+            "your target area. Choose one and ForgeFlow researches it in depth before building anything."
+        )
+    else:
+        st.warning(
+            f"No suitable independent business was confirmed in {offer.city or offer.country}. "
+            "The businesses found and why they were left out are listed below. Try a nearby larger town or a broader business type."
+        )
+    for c in no_site:
+        candidate_card(c, offer, len(candidates))
+    if with_site:
+        with st.expander(f"Already have their own website ({len(with_site)}), lower priority for a website offer"):
+            for c in with_site:
+                candidate_card(c, offer, len(candidates))
+    if hunt.rejected:
+        with st.expander(f"Left out after checking ({len(hunt.rejected)})", expanded=not candidates):
+            for c in hunt.rejected:
+                st.markdown(f"**{plain(c.name)}**: {plain(c.note)}")
                 st.caption(f"Found at: {c.source_url}")
-            if right.button("Select", key=f"pick-{i}", use_container_width=True):
-                client = Prospect(name=c.name, website=c.website, city=offer.city, country=offer.country)
-                note = f"Found {len(candidates)} potential clients for this offer; {c.name} was selected."
-                st.session_state["state"] = orchestrator.new_run(offer, client, "live", hunt_note=note)
-                st.session_state.pop("candidates", None)
-                st.rerun()
+
+
+def candidate_card(c, offer: OfferProfile, total: int) -> None:
+    with st.container(border=True):
+        left, right = st.columns([5, 1])
+        with left:
+            st.markdown(f"**{plain(c.name)}**")
+            st.markdown(plain(c.why))
+            if c.location_quote:
+                st.caption(f"Location evidence: {plain(c.location_quote)}")
+            st.caption(f"Own website: {c.website}" if c.website else "Own website: none found in search (not proof that none exists)")
+            st.caption(f"Found at: {c.source_url}")
+        if right.button("Select", key=f"pick-{c.name}", use_container_width=True):
+            client = Prospect(name=c.name, website=c.website, city=offer.city, country=offer.country)
+            note = f"Found {total} potential clients for this offer; {c.name} was selected."
+            st.session_state["state"] = orchestrator.new_run(offer, client, "live", hunt_note=note)
+            st.session_state.pop("candidates", None)
+            st.rerun()
 
 
 def client_form(demo: bool) -> None:

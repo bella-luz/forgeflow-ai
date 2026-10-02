@@ -246,30 +246,84 @@ def test_discover_without_keys_fails_clearly():
         hunter.discover(OFFER)
 
 
-def test_discover_keeps_only_businesses_named_in_results(monkeypatch):
+HUNT_OFFER = OfferProfile(capabilities="websites", industry="Mobile shops", country="Spain", city="Estella-Lizarra")
+
+
+def test_discover_verifies_type_location_and_website(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "k")
     monkeypatch.setenv("GROQ_API_KEY", "k")
-    found = {
-        "candidates": [
-            {"name": "Movil Rapido", "website": "movilrapido.example", "why": "No booking.", "source_url": "https://dir.example/a"},
-            {"name": "Movil Rapido", "source_url": "https://dir.example/a"},
-            {"name": "Invented Phones", "source_url": "https://dir.example/a"},
-            {"name": "Ghost Shop", "source_url": "https://nowhere.example"},
-            {"name": "Tienda Sol", "website": "https://made-up.example", "source_url": "https://dir.example/b"},
-        ]
+    broad = [
+        {"title": "Phone shops in Estella", "url": "https://dir.example/a",
+         "content": "Movil Rapido, phone shop in Estella. Tienda Sol, Estella. Tienda Luna, Estella. Vodafone, Estella."},
+        {"title": "Distribuidora Navarra", "url": "https://dir.example/b", "content": "Food distributor in Fontellas, Navarra."},
+    ]
+    per_business = {
+        "Movil Rapido": [{"title": "Movil Rapido", "url": "https://movilrapido.example", "content": "Calle Mayor 3, Estella-Lizarra"}],
+        "Tienda Sol": [{"title": "Tienda Sol", "url": "https://x.example", "content": "Tienda Sol, Avenida Costa Blanca, Alicante"}],
+        "Tienda Luna": [{"title": "Luna", "url": "https://facebook.com/luna", "content": "Tienda Luna, Plaza Fueros 1, Estella"}],
+        "Vodafone": [{"title": "Vodafone Estella", "url": "https://vodafone.example", "content": "Vodafone, Calle Mayor 9, Estella"}],
     }
-    results = {"results": [
-        {"title": "Movil Rapido - Valencia", "url": "https://dir.example/a", "content": "Repairs. Visit movilrapido.example"},
-        {"title": "Shops", "url": "https://dir.example/b", "content": "Tienda Sol sells phones."},
+    found = {"candidates": [
+        {"name": "Movil Rapido", "source_url": "https://dir.example/a"},
+        {"name": "Tienda Sol", "source_url": "https://dir.example/a"},
+        {"name": "Tienda Luna", "source_url": "https://dir.example/a"},
+        {"name": "Distribuidora Navarra", "source_url": "https://dir.example/b"},
+        {"name": "Invented Phones", "source_url": "https://dir.example/a"},
+        {"name": "Vodafone", "source_url": "https://dir.example/a"},
+    ]}
+    checks = {"checks": [
+        {"name": "Movil Rapido", "is_target_type": True, "in_target_location": True,
+         "location_quote": "Calle Mayor 3, Estella-Lizarra", "own_website": "https://movilrapido.example"},
+        {"name": "Tienda Sol", "is_target_type": True, "in_target_location": True,
+         "location_quote": "Calle Inventada, Estella", "own_website": ""},
+        {"name": "Tienda Luna", "is_target_type": True, "in_target_location": True,
+         "location_quote": "Plaza Fueros 1, Estella", "own_website": "https://facebook.com/luna"},
+        {"name": "Vodafone", "is_target_type": True, "is_chain": True, "in_target_location": True,
+         "location_quote": "Calle Mayor 9, Estella", "own_website": ""},
     ]}
 
-    def fake_post(url, **kwargs):
-        return FakeResponse(200, results) if "tavily" in url else chat(json.dumps(found))
+    def fake_post(url, json=None, **kwargs):
+        if "tavily" in url:
+            q = json["query"]
+            if q.startswith('"'):
+                name = q.split('"')[1]
+                return FakeResponse(200, {"results": per_business.get(name, [])})
+            return FakeResponse(200, {"results": broad})
+        system = json["messages"][0]["content"]
+        return chat(__import__("json").dumps(found if system.startswith("You pick out") else checks))
 
     monkeypatch.setattr("requests.post", fake_post)
-    got = hunter.discover(OFFER)
-    assert [c.name for c in got] == ["Movil Rapido", "Tienda Sol"]
-    assert got[0].website == "https://movilrapido.example" and got[1].website == ""
+    hunt = hunter.discover(HUNT_OFFER)
+    got = hunt.candidates
+    # Distribuidora: place not in its result. Invented: not named in the result. Both dropped before checking.
+    assert [c.name for c in got] == ["Tienda Luna", "Movil Rapido"]  # no own website listed first
+    assert got[0].website == ""  # a Facebook page is not an own website
+    assert got[1].website == "https://movilrapido.example"
+    assert "Estella" in got[1].location_quote
+    # Tienda Sol: its own results place it in Alicante. Vodafone: chain branch.
+    notes = {c.name: c.note for c in hunt.rejected}
+    assert set(notes) == {"Tienda Sol", "Vodafone"}
+    assert "located" in notes["Tienda Sol"] and "chain" in notes["Vodafone"]
+
+
+def test_research_keeps_only_public_emails_that_appear_in_results(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "k")
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+
+    def run_with(email):
+        draft = {"summary": "s", "recommended_solution": "r", "contact_email": email}
+
+        def fake_post(url, **kwargs):
+            if "tavily" in url:
+                return FakeResponse(200, {"results": [{"title": "Shop", "url": "https://shop.example", "content": "Write to info@shop.example"}]})
+            return chat(json.dumps(draft))
+
+        monkeypatch.setattr("requests.post", fake_post)
+        return hunter.research(OFFER, PROSPECT)
+
+    found = run_with("info@shop.example")
+    assert found.contact_email == "info@shop.example" and found.contact_email_source == "https://shop.example"
+    assert run_with("guess@shop.example").contact_email == ""
 
 
 def test_discover_with_failed_search_reports_it(monkeypatch):

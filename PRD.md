@@ -69,7 +69,7 @@ These are listed under Future scope.
 
 1. The user enters what they can build, a target industry, country, optional city, the language for the output, and their sender identity.
 2. The user chooses how to start:
-   - **Find potential clients:** the system searches the web for businesses of the target type in the target location and lists those it finds, each with the page where it was found. A business is listed only if it is named in a retrieved search result. The user selects one.
+   - **Find potential clients:** the system searches the web in English and in the local language for businesses of the target type in the target location. Each business found is then checked with a search of its own. It is offered to the user only if it is named in a retrieved result, is the target type, is not a branch of a large chain, and its own results place it in the target location. The address evidence is shown. Businesses without their own website are listed first; those that fail a check are listed separately with the reason. The user selects one.
    - **Known client:** the user enters a business name and, optionally, website, city, country, contact email, phone and address.
 3. The system researches the prospect with a web search provider and reads the prospect's website when one is given.
 4. The system produces an opportunity report containing a summary, business facts, need signals, services found, a recommended solution and the list of sources consulted.
@@ -78,6 +78,7 @@ These are listed under Future scope.
    - **Likely** — a reasonable inference, with its basis explained.
    - **Needs review** — the research did not find it.
 6. A claim can only be labelled Verified if its cited URL is one the system actually retrieved. Otherwise the system downgrades it automatically.
+6a. If the business publishes a contact email on a retrieved page, the system records it with its source and uses it as the default recipient. An email address that does not appear word for word in a retrieved page is discarded.
 7. The system builds a single-page demo website for the prospect: hero, services, about, contact. The page carries a visible notice that it is a concept demo and not the business's official site.
 8. Contact details on the demo come only from the prospect record entered by the user, never from generated text.
 9. The system drafts a proposal, an outreach email containing the demo link, a follow-up and a social post.
@@ -210,7 +211,8 @@ These are plans, not validated figures. The first validation step after the hack
 ## 12. Risks and limitations
 
 - Research quality depends on what is publicly findable. A business with a common name may return results about a different business; the user must review the evidence before building on it.
-- Free-tier rate limits can slow or block the language model. The template fallback keeps the workflow running.
+- Free-tier rate limits can slow or block the language model (the free tier allows about 8,000 tokens per minute per model). The system waits and retries, uses a smaller model for light steps, and the template fallback keeps the later stages running.
+- Small towns often have few independent businesses with any web presence; client search may find only chain branches there and says so.
 - Storage on Streamlit Community Cloud is temporary, so missions and demo links on the hosted app do not survive a restart.
 - "No website found" is an inference from search results, not proof, and is labelled Likely.
 - Outreach law differs by country. The MVP sends one human-approved email with identity and opt-out; a compliance layer is needed before any larger volume.

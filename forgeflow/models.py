@@ -43,6 +43,13 @@ class Candidate(BaseModel):
     website: str = ""
     why: str = ""
     source_url: str = ""
+    location_quote: str = ""
+    note: str = ""
+
+
+class HuntResult(BaseModel):
+    candidates: list[Candidate] = []
+    rejected: list[Candidate] = []
 
 
 class Source(BaseModel):
@@ -63,6 +70,8 @@ class OpportunityReport(BaseModel):
     need_signals: list[EvidenceItem] = []
     services: list[str] = []
     recommended_solution: str
+    contact_email: str = ""
+    contact_email_source: str = ""
     sources: list[Source] = []
 
 

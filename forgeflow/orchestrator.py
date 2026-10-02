@@ -82,6 +82,9 @@ def run_research(state: WorkflowState) -> bool:
             note = ""
         _clear_from(state, "report")
         state.report = report
+        if report.contact_email and not state.prospect.email:
+            state.prospect.email = report.contact_email
+            note = f"public contact email found on {report.contact_email_source}".strip()
         return note
 
     return _step(state, HUNTER, "Opportunity report ready.", action)
