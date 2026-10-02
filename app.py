@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 from pydantic import ValidationError
 
 from forgeflow import config, orchestrator, store
+from forgeflow.agents import AgentError, hunter
 from forgeflow.models import EvidenceItem, OfferProfile, Prospect, WorkflowState
 
 config.load_env()
@@ -95,6 +96,7 @@ with st.sidebar:
     st.subheader("Missions")
     if st.button("New mission", use_container_width=True):
         st.session_state.pop("state", None)
+        st.session_state.pop("candidates", None)
         st.rerun()
     runs = store.list_runs()
     if runs:
@@ -106,42 +108,92 @@ with st.sidebar:
 
 
 # --- Mission form ------------------------------------------------------------------
-def mission_form() -> None:
-    st.header("Start a mission")
-    st.write("Describe what you can build and who you want to build it for.")
+MODES = [
+    "Find potential clients for me",
+    "I already have a client in mind",
+    "Demo mode (sample client, no API keys needed)",
+]
 
-    mode = st.radio(
-        "Mode",
-        ["Target a known prospect (live research)", "Demo mode (bundled sample prospect, no API keys needed)"],
-        index=0 if config.llm_available() and config.search_available() else 1,
-    )
-    demo = mode.startswith("Demo")
+
+def offer_fields(d: OfferProfile | None) -> dict:
+    return {
+        "capabilities": st.text_area("What can you build? *", d.capabilities if d else "", placeholder="I build professional websites and booking systems for local shops.").strip(),
+        "industry": st.text_input("Type of business to target *", d.industry if d else "", placeholder="Mobile phone shops").strip(),
+        "country": st.text_input("Country *", d.country if d else "").strip(),
+        "city": st.text_input("City (optional, gives better results)", d.city if d else "").strip(),
+        "language": st.selectbox("Language for the demo and email", ["English", "Spanish"]),
+        "sender_name": st.text_input("Your name (optional, signs the email)", d.sender_name if d else "").strip(),
+        "sender_business": st.text_input("Your business name (optional)", d.sender_business if d else "").strip(),
+    }
+
+
+def make_offer(fields: dict) -> OfferProfile | None:
+    try:
+        return OfferProfile(**fields)
+    except ValidationError:
+        st.error("Please fill in the three fields marked *.")
+        return None
+
+
+def hunt_form() -> None:
+    st.write("Describe what you can build. ForgeFlow searches for businesses that could need it.")
+    with st.form("hunt"):
+        fields = offer_fields(None)
+        submitted = st.form_submit_button("Find potential clients", type="primary")
+    if submitted:
+        st.session_state.pop("candidates", None)
+        offer = make_offer(fields)
+        if offer:
+            with st.spinner("Searching for potential clients..."):
+                try:
+                    st.session_state["candidates"] = hunter.discover(offer)
+                    st.session_state["hunt_offer"] = offer
+                except AgentError as exc:
+                    st.error(str(exc))
+
+    candidates = st.session_state.get("candidates")
+    if not candidates:
+        return
+    offer = st.session_state["hunt_offer"]
+    st.subheader(f"{len(candidates)} potential clients found")
+    st.caption("Choose one. ForgeFlow then researches it in depth before building anything.")
+    for i, c in enumerate(candidates):
+        with st.container(border=True):
+            left, right = st.columns([5, 1])
+            with left:
+                st.markdown(f"**{plain(c.name)}**")
+                st.markdown(plain(c.why))
+                if c.website:
+                    st.caption(f"Website: {c.website}")
+                st.caption(f"Found at: {c.source_url}")
+            if right.button("Select", key=f"pick-{i}", use_container_width=True):
+                client = Prospect(name=c.name, website=c.website, city=offer.city, country=offer.country)
+                note = f"Found {len(candidates)} potential clients for this offer; {c.name} was selected."
+                st.session_state["state"] = orchestrator.new_run(offer, client, "live", hunt_note=note)
+                st.session_state.pop("candidates", None)
+                st.rerun()
+
+
+def client_form(demo: bool) -> None:
     fixture = orchestrator.load_fixture() if demo else None
-    offer_d = fixture["offer"] if demo else None
-    prospect_d = fixture["prospect"] if demo else None
+    client_d = fixture["prospect"] if demo else None
 
     with st.form("mission"):
         left, right = st.columns(2)
         with left:
             st.subheader("Your offer")
-            capabilities = st.text_area("What can you build?", offer_d.capabilities if demo else "", placeholder="I build professional websites and booking systems for local shops.")
-            industry = st.text_input("Target industry", offer_d.industry if demo else "")
-            country = st.text_input("Target country", offer_d.country if demo else "")
-            city = st.text_input("Target city (optional)", offer_d.city if demo else "")
-            language = st.selectbox("Language for the demo and email", ["English", "Spanish"])
-            sender_name = st.text_input("Your name (shown in the email)", offer_d.sender_name if demo else "")
-            sender_business = st.text_input("Your business name (optional)", offer_d.sender_business if demo else "")
+            fields = offer_fields(fixture["offer"] if demo else None)
         with right:
-            st.subheader("Prospect")
+            st.subheader("Potential client")
             if demo:
                 st.info("Sample data for a fictional business. Research results are bundled, not live.")
-            name = st.text_input("Business name", prospect_d.name if demo else "", disabled=demo)
+            name = st.text_input("Business name *", client_d.name if demo else "", disabled=demo)
             website = st.text_input("Website (optional)", "", disabled=demo)
-            p_city = st.text_input("City", prospect_d.city if demo else "", disabled=demo)
-            p_country = st.text_input("Country", prospect_d.country if demo else "", disabled=demo)
-            email = st.text_input("Contact email (optional, used only after your approval)", prospect_d.email if demo else "")
+            p_city = st.text_input("City (optional)", client_d.city if demo else "", disabled=demo)
+            p_country = st.text_input("Country (optional)", client_d.country if demo else "", disabled=demo)
+            email = st.text_input("Contact email (optional, used only after your approval)", client_d.email if demo else "")
             phone = st.text_input("Phone (optional, shown on the demo)", "")
-            address = st.text_input("Address (optional, shown on the demo)", prospect_d.address if demo else "")
+            address = st.text_input("Address (optional, shown on the demo)", client_d.address if demo else "")
             notes = st.text_area("Notes (optional)", "")
         submitted = st.form_submit_button("Create mission", type="primary")
 
@@ -150,25 +202,33 @@ def mission_form() -> None:
     if email and not config.valid_email(email):
         st.error("The contact email address is not valid.")
         return
+    offer = make_offer(fields)
+    if offer is None:
+        return
     try:
-        offer = OfferProfile(
-            capabilities=capabilities.strip(), industry=industry.strip(), country=country.strip(), city=city.strip(),
-            language=language, sender_name=sender_name.strip(), sender_business=sender_business.strip(),
-        )
-        prospect = Prospect(
-            name=(prospect_d.name if demo else name).strip(), website=website.strip(),
-            city=(prospect_d.city if demo else p_city).strip(), country=(prospect_d.country if demo else p_country).strip(),
+        client = Prospect(
+            name=(client_d.name if demo else name).strip(), website=website.strip(),
+            city=(client_d.city if demo else p_city).strip(), country=(client_d.country if demo else p_country).strip(),
             email=email.strip(), phone=phone.strip(), address=address.strip(), notes=notes.strip(),
         )
-        st.session_state["state"] = orchestrator.new_run(offer, prospect, "demo" if demo else "live")
-    except ValidationError as exc:
-        missing = ", ".join(str(e["loc"][0]).replace("_", " ") for e in exc.errors())
-        st.error(f"Please complete these fields: {missing}.")
+        st.session_state["state"] = orchestrator.new_run(offer, client, "demo" if demo else "live")
+    except ValidationError:
+        st.error("Please enter the business name.")
         return
     except ValueError as exc:
         st.error(str(exc))
         return
     st.rerun()
+
+
+def mission_form() -> None:
+    st.header("Start a mission")
+    live = config.llm_available() and config.search_available()
+    mode = st.radio("How do you want to start?", MODES, index=0 if live else 2)
+    if mode == MODES[0]:
+        hunt_form()
+    else:
+        client_form(demo=mode == MODES[2])
 
 
 # --- Mission dashboard -------------------------------------------------------------
@@ -192,7 +252,7 @@ def dashboard(state: WorkflowState) -> None:
             st.markdown(plain(state.offer.capabilities))
             st.caption(f"Target: {state.offer.industry}, {state.offer.city} {state.offer.country} · Language: {state.offer.language}")
         with right:
-            st.subheader("Prospect")
+            st.subheader("Potential client")
             st.markdown(plain(state.prospect.name))
             for label, value in (("Website", state.prospect.website), ("Email", state.prospect.email), ("Address", state.prospect.address), ("Notes", state.prospect.notes)):
                 if value:

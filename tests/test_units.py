@@ -238,3 +238,43 @@ def test_reply_heuristics():
     assert a.intent == "interested" and len(a.questions) == 2
     assert any("booking" in f for f in a.requested_features)
     assert sales._template_reply("No thanks, not interested.").intent == "not_interested"
+
+
+# --- hunt mode ---
+def test_discover_without_keys_fails_clearly():
+    with pytest.raises(hunter.AgentError, match="TAVILY_API_KEY"):
+        hunter.discover(OFFER)
+
+
+def test_discover_keeps_only_businesses_named_in_results(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "k")
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    found = {
+        "candidates": [
+            {"name": "Movil Rapido", "website": "movilrapido.example", "why": "No booking.", "source_url": "https://dir.example/a"},
+            {"name": "Movil Rapido", "source_url": "https://dir.example/a"},
+            {"name": "Invented Phones", "source_url": "https://dir.example/a"},
+            {"name": "Ghost Shop", "source_url": "https://nowhere.example"},
+            {"name": "Tienda Sol", "website": "https://made-up.example", "source_url": "https://dir.example/b"},
+        ]
+    }
+    results = {"results": [
+        {"title": "Movil Rapido - Valencia", "url": "https://dir.example/a", "content": "Repairs. Visit movilrapido.example"},
+        {"title": "Shops", "url": "https://dir.example/b", "content": "Tienda Sol sells phones."},
+    ]}
+
+    def fake_post(url, **kwargs):
+        return FakeResponse(200, results) if "tavily" in url else chat(json.dumps(found))
+
+    monkeypatch.setattr("requests.post", fake_post)
+    got = hunter.discover(OFFER)
+    assert [c.name for c in got] == ["Movil Rapido", "Tienda Sol"]
+    assert got[0].website == "https://movilrapido.example" and got[1].website == ""
+
+
+def test_discover_with_failed_search_reports_it(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "k")
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    monkeypatch.setattr("requests.post", lambda *a, **k: FakeResponse(500))
+    with pytest.raises(hunter.AgentError, match="returned nothing"):
+        hunter.discover(OFFER)

@@ -43,7 +43,8 @@ The differentiator is the demo. ForgeFlow does not only find a lead; it builds t
 | # | Feature | Status |
 |---|---|---|
 | 1 | User describes their offer, target industry and geography | Built |
-| 2 | Target Mode: research a known prospect from public web information | Built |
+| 2 | Hunt Mode: search the web for businesses that match the offer and list them as potential clients to choose from | Built |
+| 2a | Target Mode: start from a potential client the user already knows | Built |
 | 3 | Opportunity report with evidence labelled Verified, Likely or Needs review, each with its source | Built |
 | 4 | Personalized website demo generated from the report, with a shareable link | Built |
 | 5 | Proposal, outreach email, follow-up and social post drafts | Built |
@@ -55,7 +56,7 @@ The differentiator is the demo. ForgeFlow does not only find a lead; it builds t
 
 ### Out of scope for the MVP
 
-- Hunt Mode (automatic discovery of many prospects)
+- Continuous or large-scale client hunting, and ranking of potential clients
 - Mass or automated outreach
 - Phone, WhatsApp or LinkedIn automation
 - Social media publishing
@@ -67,7 +68,9 @@ These are listed under Future scope.
 ## 5. Functional requirements
 
 1. The user enters what they can build, a target industry, country, optional city, the language for the output, and their sender identity.
-2. The user enters a known prospect: business name and, optionally, website, city, country, contact email, phone and address.
+2. The user chooses how to start:
+   - **Find potential clients:** the system searches the web for businesses of the target type in the target location and lists those it finds, each with the page where it was found. A business is listed only if it is named in a retrieved search result. The user selects one.
+   - **Known client:** the user enters a business name and, optionally, website, city, country, contact email, phone and address.
 3. The system researches the prospect with a web search provider and reads the prospect's website when one is given.
 4. The system produces an opportunity report containing a summary, business facts, need signals, services found, a recommended solution and the list of sources consulted.
 5. Every fact and need signal carries one of three labels:
@@ -121,7 +124,7 @@ search       template              (after approval)
 
 | Agent | Input | Output |
 |---|---|---|
-| Opportunity Hunter | Offer, prospect | Opportunity report with labelled evidence and sources |
+| Opportunity Hunter | Offer; then the chosen potential client | List of potential clients; opportunity report with labelled evidence and sources |
 | Builder | Opportunity report | Demo specification, rendered HTML site, shareable link |
 | Growth & Sales | Report, demo link; later the customer's reply | Proposal, email, follow-up, social post; reply analysis |
 | Requirements & Delivery | Reply analysis, report, demo specification | Structured requirements, project PRD |
@@ -214,7 +217,7 @@ These are plans, not validated figures. The first validation step after the hack
 
 ## 13. Future scope
 
-- **Hunt Mode:** discover and rank multiple prospects for an offer.
+- **Deeper hunting:** rank potential clients by strength of need, run searches continuously, and find contact details from licensed data sources.
 - **More builders:** booking systems, ordering apps, AI customer-service agents, automations.
 - **PRD to build:** hand the generated PRD to a coding agent to produce the final product.
 - **Iterative requirements:** follow-up questions to the customer until open questions are closed.

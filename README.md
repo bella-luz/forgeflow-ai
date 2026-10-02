@@ -2,7 +2,7 @@
 
 You build. ForgeFlow finds the client, builds the demo and prepares the project.
 
-ForgeFlow AI is an agentic system for freelancers and small agencies. You describe what you can build and name a prospect. It researches the business, finds evidence of a need, builds a personalized demo website, drafts the proposal and email, waits for your approval, analyses the customer's reply, and produces a project PRD.
+ForgeFlow AI is an agentic system for freelancers and small agencies. You describe what you can build. It finds potential clients (or takes one you already know), researches the business, finds evidence of a need, builds a personalized demo website, drafts the proposal and email, waits for your approval, analyses the customer's reply, and produces a project PRD.
 
 See [PRD.md](PRD.md) for the full product document.
 

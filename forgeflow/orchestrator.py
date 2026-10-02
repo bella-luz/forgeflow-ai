@@ -32,11 +32,13 @@ def load_fixture() -> dict:
     }
 
 
-def new_run(offer: OfferProfile, prospect: Prospect, mode: str = "live") -> WorkflowState:
+def new_run(offer: OfferProfile, prospect: Prospect, mode: str = "live", hunt_note: str = "") -> WorkflowState:
     if prospect.website:
         prospect = prospect.model_copy(update={"website": config.clean_url(prospect.website)})
     slug = re.sub(r"[^a-z0-9]+", "-", prospect.name.lower()).strip("-")[:30] or "run"
     state = WorkflowState(id=f"{slug}-{uuid.uuid4().hex[:6]}", mode=mode, offer=offer, prospect=prospect)
+    if hunt_note:
+        _log(state, HUNTER, "ok", hunt_note)
     _log(state, ORCHESTRATOR, "ok", f"Mission created in {mode} mode.")
     store.save(state)
     return state

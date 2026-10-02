@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from .. import config
 from ..llm import LLMError, complete_json
-from ..models import EvidenceItem, EvidenceStatus, OfferProfile, OpportunityReport, Prospect, Source
+from ..models import Candidate, EvidenceItem, EvidenceStatus, OfferProfile, OpportunityReport, Prospect, Source
 from ..tools import search as search_tool
 from ..tools.search import SearchResult
 from . import AgentError
@@ -115,3 +115,72 @@ def research(offer: OfferProfile, prospect: Prospect) -> OpportunityReport:
         recommended_solution=draft.recommended_solution,
         sources=[Source(title=r.title, url=r.url) for r in results],
     )
+
+
+DISCOVER_SYSTEM = """You pick out individual local businesses from web search results, for a builder looking \
+for potential clients.
+
+Rules:
+- List only specific businesses that are named in the search results. Never add a business from memory.
+- Skip directories, marketplaces, review sites, news sites and large national or international chains.
+- name: the business name exactly as written in the result.
+- source_url: the exact URL of the search result that names it.
+- website: the business's own website only if a result shows it; otherwise an empty string.
+- why: one sentence, based only on the result, on why the builder's offer could help this business. \
+If the result gives no indication, write "Not yet researched."
+- Return at most 6 businesses."""
+
+
+class _Candidates(BaseModel):
+    candidates: list[Candidate] = []
+
+
+def discover(offer: OfferProfile) -> list[Candidate]:
+    """Hunt Mode: find businesses matching the offer. Only businesses named in a retrieved result are kept."""
+    if not config.search_available() or not config.llm_available():
+        raise AgentError("Finding clients needs both a search key (TAVILY_API_KEY) and an LLM key (GROQ_API_KEY).")
+
+    place = " ".join(p for p in (offer.city, offer.country) if p)
+    results: dict[str, SearchResult] = {}
+    errors: list[str] = []
+    for query in (f"{offer.industry} in {place}", f"independent local {offer.industry} {place} contact"):
+        outcome = search_tool.search(query, max_results=8)
+        if not outcome.ok:
+            errors.append(outcome.error)
+        for r in outcome.results:
+            results.setdefault(_norm(r.url), r)
+    if not results:
+        raise AgentError("The search returned nothing. " + "; ".join(errors))
+
+    user = json.dumps(
+        {
+            "builder_offer": offer.capabilities,
+            "target_business_type": offer.industry,
+            "location": place,
+            "search_results": [r.model_dump() for r in results.values()],
+        },
+        ensure_ascii=False,
+    )
+    try:
+        draft = complete_json(DISCOVER_SYSTEM, user, _Candidates, temperature=0.1)
+    except LLMError as exc:
+        raise AgentError(f"Could not read the search results: {exc}")
+
+    all_text = " ".join(f"{r.url} {r.content}" for r in results.values()).lower()
+    kept: dict[str, Candidate] = {}
+    for c in draft.candidates:
+        source = results.get(_norm(c.source_url))
+        name = c.name.strip()
+        if source is None or name.lower() not in f"{source.title} {source.content}".lower():
+            continue  # not actually named in the cited result
+        website = ""
+        try:
+            cleaned = config.clean_url(c.website)
+            host = cleaned.split("//", 1)[1].split("/", 1)[0].lower().removeprefix("www.")
+            website = cleaned if host in all_text else ""
+        except ValueError:
+            pass
+        kept.setdefault(name.lower(), Candidate(name=name, website=website, why=c.why, source_url=source.url))
+    if not kept:
+        raise AgentError("No individual businesses could be identified in the search results. Try a different city or business type.")
+    return list(kept.values())

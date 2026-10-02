@@ -36,6 +36,15 @@ class Prospect(BaseModel):
     notes: str = ""
 
 
+class Candidate(BaseModel):
+    """A business found in Hunt Mode, before any in-depth research."""
+
+    name: str = Field(min_length=2)
+    website: str = ""
+    why: str = ""
+    source_url: str = ""
+
+
 class Source(BaseModel):
     title: str = ""
     url: str
