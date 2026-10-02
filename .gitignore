@@ -1,0 +1,18 @@
+# Secrets
+.env
+.streamlit/secrets.toml
+
+# Local environment and caches
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Runtime data
+data/forgeflow.db
+data/demos/
+
+# Internal working files, kept locally only
+CLAUDE.md
+.claude/
+notes/
+*.docx

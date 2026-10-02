@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="{{ t.lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{ spec.business_name }}</title>
+<style>
+  :root { --ink:#16202e; --muted:#5b6778; --line:#e3e8ef; --bg:#f6f8fb; --accent:#1f5eff; --accent-dark:#1746c2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; color:var(--ink); background:#fff; line-height:1.6; }
+  .wrap { max-width:1040px; margin:0 auto; padding:0 20px; }
+  .notice { background:#fff7e0; border-bottom:1px solid #f0dfa8; font-size:13px; padding:8px 0; text-align:center; color:#5c4a12; }
+  header.nav { border-bottom:1px solid var(--line); }
+  header.nav .wrap { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 24px; padding-top:16px; padding-bottom:16px; }
+  .brand { font-weight:700; font-size:20px; }
+  nav a { color:var(--muted); text-decoration:none; margin-left:20px; font-size:15px; }
+  nav a:first-child { margin-left:0; }
+  .hero { background:linear-gradient(135deg,#0f1b33,#1f3f8f); color:#fff; padding:84px 0; }
+  .hero h1 { font-size:clamp(30px,5vw,48px); line-height:1.15; margin:0 0 16px; max-width:760px; }
+  .hero p { font-size:18px; max-width:640px; margin:0 0 28px; color:#dbe4f7; }
+  .btn { display:inline-block; background:#fff; color:var(--accent-dark); font-weight:600; padding:13px 24px; border-radius:8px; text-decoration:none; }
+  section { padding:64px 0; }
+  section.alt { background:var(--bg); }
+  h2 { font-size:28px; margin:0 0 24px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px; }
+  .card h3 { margin:0 0 8px; font-size:18px; }
+  .card p { margin:0; color:var(--muted); font-size:15px; }
+  .about { max-width:760px; font-size:17px; color:#2c3a4f; }
+  ul.points { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
+  ul.points li { border-left:3px solid var(--accent); padding:4px 0 4px 14px; }
+  .contact p { margin:4px 0; overflow-wrap:anywhere; }
+  .contact .label { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; }
+  footer { border-top:1px solid var(--line); padding:24px 0; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="notice"><div class="wrap">{{ t.notice }}{% if spec.prepared_by %} {{ t.prepared_by }} {{ spec.prepared_by }}.{% endif %}</div></div>
+
+<header class="nav"><div class="wrap">
+  <div class="brand">{{ spec.business_name }}</div>
+  <nav>
+    {% if spec.services %}<a href="#services">{{ t.services }}</a>{% endif %}
+    <a href="#about">{{ t.about }}</a>
+    <a href="#contact">{{ t.contact }}</a>
+  </nav>
+</div></header>
+
+<div class="hero"><div class="wrap">
+  <h1>{{ spec.tagline }}</h1>
+  <p>{{ spec.hero_text }}</p>
+  <a class="btn" href="#contact">{{ spec.cta_text }}</a>
+</div></div>
+
+{% if spec.services %}
+<section id="services"><div class="wrap">
+  <h2>{{ t.services }}</h2>
+  <div class="grid">
+    {% for s in spec.services %}
+    <div class="card"><h3>{{ s.name }}</h3>{% if s.description %}<p>{{ s.description }}</p>{% endif %}</div>
+    {% endfor %}
+  </div>
+</div></section>
+{% endif %}
+
+<section id="about" class="alt"><div class="wrap">
+  <h2>{{ t.about }}</h2>
+  <p class="about">{{ spec.about }}</p>
+  {% if spec.highlights %}
+  <ul class="points">{% for h in spec.highlights %}<li>{{ h }}</li>{% endfor %}</ul>
+  {% endif %}
+</div></section>
+
+<section id="contact" class="contact"><div class="wrap">
+  <h2>{{ t.contact }}</h2>
+  {% if spec.address %}<p class="label">{{ t.address }}</p><p>{{ spec.address }}</p>{% endif %}
+  {% if spec.phone %}<p class="label">{{ t.phone }}</p><p>{{ spec.phone }}</p>{% endif %}
+  {% if spec.email %}<p class="label">{{ t.email }}</p><p>{{ spec.email }}</p>{% endif %}
+  {% if not (spec.address or spec.phone or spec.email) %}<p>{{ t.contact_pending }}</p>{% endif %}
+</div></section>
+
+<footer><div class="wrap">{{ spec.business_name }} &middot; {{ t.footer }}</div></footer>
+</body>
+</html>

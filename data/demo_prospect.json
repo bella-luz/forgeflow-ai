@@ -1,0 +1,72 @@
+{
+  "_note": "Fictional sample used by demo mode. The business, sources and reply are invented for demonstration and are labelled as sample data in the app.",
+  "offer": {
+    "capabilities": "I build professional websites and online booking systems for local shops.",
+    "industry": "Mobile phone shops",
+    "country": "Spain",
+    "city": "Valencia",
+    "price_range": "",
+    "language": "English",
+    "sender_name": "ForgeFlow Demo Team",
+    "sender_business": "ForgeFlow Studio"
+  },
+  "prospect": {
+    "name": "MovilPunto Valencia (sample)",
+    "website": "",
+    "city": "Valencia",
+    "country": "Spain",
+    "email": "owner@example.com",
+    "phone": "",
+    "address": "Sample Street 12, Valencia",
+    "notes": "Fictional sample prospect."
+  },
+  "report": {
+    "summary": "MovilPunto Valencia is a neighbourhood mobile phone shop offering phone sales, repairs and accessories. It is listed in a local directory but no website of its own was found.",
+    "business_facts": [
+      {
+        "claim": "The shop sells mobile phones and accessories in Valencia.",
+        "status": "VERIFIED",
+        "source_url": "https://example.com/directory/movilpunto-valencia",
+        "excerpt": "MovilPunto - mobile phones, accessories and repairs."
+      },
+      {
+        "claim": "The shop offers screen and battery repairs.",
+        "status": "VERIFIED",
+        "source_url": "https://example.com/directory/movilpunto-valencia",
+        "excerpt": "Screen replacement and battery repair while you wait."
+      },
+      {
+        "claim": "The shop serves walk-in customers from the surrounding neighbourhood.",
+        "status": "LIKELY",
+        "source_url": "",
+        "excerpt": "Inferred from the directory listing showing a single street address and no online ordering."
+      },
+      {
+        "claim": "Opening hours",
+        "status": "INSUFFICIENT",
+        "source_url": "",
+        "excerpt": "No source states the opening hours."
+      }
+    ],
+    "need_signals": [
+      {
+        "claim": "No dedicated website was found for the shop.",
+        "status": "LIKELY",
+        "source_url": "",
+        "excerpt": "Searches returned only a directory listing; absence of results is not proof."
+      },
+      {
+        "claim": "Customers cannot book a repair online.",
+        "status": "LIKELY",
+        "source_url": "",
+        "excerpt": "The directory listing gives no booking link."
+      }
+    ],
+    "services": ["Mobile phone sales", "Screen and battery repair", "Accessories"],
+    "recommended_solution": "A simple, mobile-friendly website presenting the shop's phones, repair services and accessories, with clear contact details and a repair booking request form as a second step.",
+    "sources": [
+      {"title": "Local directory listing (sample)", "url": "https://example.com/directory/movilpunto-valencia"}
+    ]
+  },
+  "sample_reply": "Hi, thanks for this, we like it. Can you also add online booking for repairs and a WhatsApp button? How much would it cost and how long does it take?"
+}

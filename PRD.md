@@ -1,0 +1,227 @@
+# ForgeFlow AI — Product Requirements Document
+
+**Tagline:** You build. ForgeFlow finds the client, builds the demo and prepares the project.
+
+**Category:** Agentic AI / AI-powered business automation
+
+**Status:** Hackathon MVP (PakAngels GenAI & Agentic AI Training, Cohort 11, final hackathon, 02–04 October 2026)
+
+## 1. Problem
+
+AI tools have made building software cheap. Freelancers, students, small agencies and no-code builders can now produce a website or an app in hours. The hard part has moved: they can build, but they do not know who will pay for it.
+
+Existing lead tools hand over a list of businesses. A list does not say whether a business actually has a need, and it gives the builder nothing to show.
+
+## 2. Solution
+
+ForgeFlow AI starts from what the user can build and works forward to a signed-off project:
+
+```
+What you can build
+  → research a prospect
+  → find evidence of a real need
+  → build a personalized demo website for that prospect
+  → write the proposal and outreach email
+  → human approves, email is sent
+  → analyse the customer's reply
+  → structured requirements
+  → project PRD ready for a developer or coding agent
+```
+
+The differentiator is the demo. ForgeFlow does not only find a lead; it builds the thing being sold, for that specific business, before the first contact.
+
+## 3. Target users
+
+- Freelance web and app developers
+- Small agencies
+- Students and AI-assisted builders who can ship but have no sales pipeline
+
+## 4. Scope of the MVP
+
+### In scope
+
+| # | Feature | Status |
+|---|---|---|
+| 1 | User describes their offer, target industry and geography | Built |
+| 2 | Target Mode: research a known prospect from public web information | Built |
+| 3 | Opportunity report with evidence labelled Verified, Likely or Needs review, each with its source | Built |
+| 4 | Personalized website demo generated from the report, with a shareable link | Built |
+| 5 | Proposal, outreach email, follow-up and social post drafts | Built |
+| 6 | Human approval gate before any email is sent; preview-only without email credentials | Built |
+| 7 | Customer reply analysis: intent, questions, objections, requested features | Built |
+| 8 | Structured requirements and a generated project PRD (downloadable) | Built |
+| 9 | Demo mode that runs the whole workflow with no API keys | Built |
+| 10 | Agent activity timeline | Built |
+
+### Out of scope for the MVP
+
+- Hunt Mode (automatic discovery of many prospects)
+- Mass or automated outreach
+- Phone, WhatsApp or LinkedIn automation
+- Social media publishing
+- Generating products other than a website (booking systems, apps, AI agents)
+- User accounts and multi-user data separation
+
+These are listed under Future scope.
+
+## 5. Functional requirements
+
+1. The user enters what they can build, a target industry, country, optional city, the language for the output, and their sender identity.
+2. The user enters a known prospect: business name and, optionally, website, city, country, contact email, phone and address.
+3. The system researches the prospect with a web search provider and reads the prospect's website when one is given.
+4. The system produces an opportunity report containing a summary, business facts, need signals, services found, a recommended solution and the list of sources consulted.
+5. Every fact and need signal carries one of three labels:
+   - **Verified** — stated in a retrieved source, with that source's URL.
+   - **Likely** — a reasonable inference, with its basis explained.
+   - **Needs review** — the research did not find it.
+6. A claim can only be labelled Verified if its cited URL is one the system actually retrieved. Otherwise the system downgrades it automatically.
+7. The system builds a single-page demo website for the prospect: hero, services, about, contact. The page carries a visible notice that it is a concept demo and not the business's official site.
+8. Contact details on the demo come only from the prospect record entered by the user, never from generated text.
+9. The system drafts a proposal, an outreach email containing the demo link, a follow-up and a social post.
+10. The email always includes the sender's identity and an opt-out line.
+11. No email is sent unless the user ticks an approval box and presses the send button. The user can edit the recipient, subject and body first. One email per mission.
+12. Without email credentials the approval is recorded and the email is shown as a preview; the system states that nothing was sent.
+13. The user pastes the customer's reply. The system extracts intent, questions, objections, requested features and information still missing, and drafts a response.
+14. The system produces structured requirements (functional requirements, pages, integrations, content needed, assumptions, open questions, acceptance criteria, out of scope) and a project PRD in Markdown.
+15. Anything the customer did not say is recorded as an assumption or open question, not as a requirement.
+16. Each mission is saved and can be reopened.
+
+## 6. Non-functional requirements
+
+- **Honesty:** the system never invents company facts, contact details, reviews, prices or customer requirements. When research fails it reports the failure instead of producing a report.
+- **Reliability:** every external call has a timeout and returns a structured failure. A failed step leaves the mission's saved state unchanged and can be retried.
+- **Graceful fallback:** if the language model is unavailable, the Builder, Sales and Requirements agents fall back to deterministic templates and the activity log says so.
+- **Security:** API keys come from environment variables or Streamlit secrets. Text from the web and from the model is escaped before display. Generated code is never executed on the server.
+- **Compliance:** only public information is used. The system does not scrape or automate platforms whose terms forbid it. Outreach is one human-approved email with sender identity and opt-out.
+- **Cost:** the MVP runs entirely on free tiers.
+
+## 7. Architecture
+
+```
+                 Streamlit dashboard (app.py)
+                            |
+              Orchestrator (deterministic workflow)
+                            |
+   +------------+-----------+-----------+----------------+
+   |            |                       |                |
+Opportunity   Builder            Growth & Sales     Requirements
+  Hunter                                              & Delivery
+   |            |                       |                |
+Tavily       Jinja2 HTML           SMTP email        Markdown PRD
+search       template              (after approval)
+   |            |                       |                |
+   +------------+-----------+-----------+----------------+
+                            |
+                 Groq LLM (structured JSON output)
+                            |
+                 SQLite (one saved state per mission)
+```
+
+**Four worker agents**
+
+| Agent | Input | Output |
+|---|---|---|
+| Opportunity Hunter | Offer, prospect | Opportunity report with labelled evidence and sources |
+| Builder | Opportunity report | Demo specification, rendered HTML site, shareable link |
+| Growth & Sales | Report, demo link; later the customer's reply | Proposal, email, follow-up, social post; reply analysis |
+| Requirements & Delivery | Reply analysis, report, demo specification | Structured requirements, project PRD |
+
+**Orchestrator.** Plain application code, not a fifth AI agent. It fixes the order of the stages, refuses to run a stage before its inputs exist, owns the approval gate, records every agent action, and saves state after each step. Agents never call each other; they return typed objects that the orchestrator passes on.
+
+**Why this is agentic.** Each agent pursues its own goal using tools (search, page extraction, site rendering, email) and makes judgements (what counts as evidence, what the business needs, what the customer is asking for). The chain runs from a one-line statement of capability to a project specification, with a human deciding only at the approval gate.
+
+**Structured data.** All data passed between stages is a validated Pydantic model. The demo website is rendered from a structured specification through a fixed template, so the language model writes copy, not code.
+
+## 8. Tools and technologies
+
+| Purpose | Tool | Cost for the MVP |
+|---|---|---|
+| Language | Python 3.11 | Free |
+| Dashboard | Streamlit | Free, open source |
+| Data models and validation | Pydantic | Free, open source |
+| LLM | Groq API, model `openai/gpt-oss-120b` | Free tier |
+| Web research | Tavily API | Free tier |
+| Website rendering | Jinja2 template | Free, open source |
+| Email | SMTP (Brevo free plan or any SMTP account) | Free tier |
+| Storage | SQLite | Free |
+| Hosting | Streamlit Community Cloud | Free |
+| Source control | GitHub | Free |
+| Tests | pytest | Free, open source |
+| Development | Claude Code | Existing subscription |
+
+Framework decision: plain Python, Pydantic and direct HTTP calls. Agent frameworks (CrewAI, LangGraph, AutoGen, Pydantic AI) were considered and not used, because the workflow is a fixed sequence and typed function calls are simpler to test and debug. The application has four runtime dependencies.
+
+Open-source projects studied as references: OpenPage (structured site model), karero/website-builder, LangChain social-media-agent (human-in-the-loop pattern), Browser Use, Hermes Agent. No code was copied from them.
+
+## 9. Finance
+
+### Cost of the MVP
+
+The MVP has no running cost. Every service is used on its free tier, and development used a subscription the team already had.
+
+### Cost when scaling
+
+The first paid items, in the order they are expected to be needed:
+
+| Item | Why it becomes necessary |
+|---|---|
+| A domain name and verified email sending | Deliverability and a professional sender address |
+| Paid LLM usage | Free-tier rate limits cap the number of missions per day |
+| Paid search usage | Free-tier monthly allowance caps research volume |
+| Hosted database and app hosting | Streamlit Community Cloud storage is temporary and single-instance |
+| Demo site hosting | Permanent public links for many demos |
+
+Prices are not stated here because they change; they will be taken from each provider's price list when the decision is made.
+
+### Revenue model (planned)
+
+1. **Own use first.** The team uses ForgeFlow to win its own website and automation projects. Each project won is direct revenue at near-zero acquisition cost.
+2. **Subscription for builders.** A monthly plan for freelancers and small agencies, tiered by missions per month.
+3. **Agency plan.** Multiple users and campaigns, with shared prospect history.
+
+These are plans, not validated figures. The first validation step after the hackathon is to run real missions and measure reply rate and projects won.
+
+## 10. Demo scenario
+
+1. The user enters: "I build professional websites and booking systems for local shops", industry "Mobile phone shops", country "Spain".
+2. The user enters a known prospect, a mobile phone shop in Spain.
+3. Opportunity Hunter researches it and shows evidence cards with sources.
+4. Builder generates the personalized website; the user opens the shareable link.
+5. Growth & Sales drafts the proposal and email.
+6. The user reviews, edits, ticks approval and sends.
+7. The customer's reply is pasted in: "We like it. Can you also add online booking and a WhatsApp button?"
+8. The reply is analysed and turned into requirements and a PRD.
+
+## 11. Success criteria
+
+| Criterion | Target | Result |
+|---|---|---|
+| End-to-end workflow | One prospect through to PRD | Achieved in live and demo modes |
+| Agents | Four worker agents visibly participate | Achieved, shown in the activity timeline |
+| Evidence quality | No unsupported claim labelled Verified | Enforced in code and tested |
+| Demo | A real, clickable personalized website | Achieved |
+| Outreach | One human-approved email | Approval gate built; live sending needs SMTP credentials |
+| Works without keys | Full demo mode | Achieved and tested |
+| Cost | Free tiers only | Achieved |
+
+## 12. Risks and limitations
+
+- Research quality depends on what is publicly findable. A business with a common name may return results about a different business; the user must review the evidence before building on it.
+- Free-tier rate limits can slow or block the language model. The template fallback keeps the workflow running.
+- Storage on Streamlit Community Cloud is temporary, so missions and demo links on the hosted app do not survive a restart.
+- "No website found" is an inference from search results, not proof, and is labelled Likely.
+- Outreach law differs by country. The MVP sends one human-approved email with identity and opt-out; a compliance layer is needed before any larger volume.
+
+## 13. Future scope
+
+- **Hunt Mode:** discover and rank multiple prospects for an offer.
+- **More builders:** booking systems, ordering apps, AI customer-service agents, automations.
+- **PRD to build:** hand the generated PRD to a coding agent to produce the final product.
+- **Iterative requirements:** follow-up questions to the customer until open questions are closed.
+- **Permanent demo hosting** on a custom domain.
+- **Scheduled follow-ups** with compliance controls per country.
+- **Social publishing** through official APIs.
+- **Accounts, teams and a hosted database.**
+- **Analytics:** opportunities found, demos built, replies, projects won.
+- **Quotes and estimates** generated from the requirements.
+- **More languages** for demos and outreach.
