@@ -67,10 +67,10 @@ These are listed under Future scope.
 
 ## 5. Functional requirements
 
-1. The user enters what they can build, a target industry, country, optional city, the language for the output, and their sender identity.
+1. The user enters what they can build and their sender identity, and chooses the language for the demo and email: automatic (from the client's country: English, Spanish, French, German, Italian or Portuguese) or a specific one.
 2. The user chooses how to start:
-   - **Find potential clients:** the system searches the web in English and in the local language for businesses of the target type in the target location. Each business found is then checked with a search of its own. It is offered to the user only if it is named in a retrieved result, is the target type, is not a branch of a large chain, its own results place it in the target location, and it has a page of its own (website, map listing or social profile); businesses found only in aggregator directories are rejected because those are often out of date. Each result has a Google Maps link so the user can confirm it. The address evidence is shown. Businesses without their own website are listed first; those that fail a check are listed separately with the reason. The user selects one.
-   - **Known client:** the user enters a business name and, optionally, website, city, country, contact email, phone and address.
+   - **Find potential clients:** the system looks up the target town on OpenStreetMap and lists the businesses of the target type mapped there, with their street address and any website, phone, email and opening hours on the listing. Branches of chains and network operators are set aside with the reason. For listings without a website, a web search checks whether the business has one. Businesses without a website are listed first. Each has a Google Maps link so the user can confirm it is still there. If the map lists fewer than three, a web search adds businesses that pass strict checks (named in a result, right type, not a chain, located in the town, with a page of their own). The user selects one.
+   - **Known client:** the user enters the business name and country, and optionally town, address, phone, website and email. The type of business is optional. Before research, the system looks the business up on OpenStreetMap to add its exact location and any missing details; values the user entered are never overwritten.
 3. The system researches the prospect with a web search provider and reads the prospect's website when one is given.
 4. The system produces an opportunity report containing a summary, business facts, need signals, services found, a recommended solution and the list of sources consulted.
 5. Every fact and need signal carries one of three labels:
@@ -79,7 +79,8 @@ These are listed under Future scope.
    - **Needs review** — the research did not find it.
 6. A claim can only be labelled Verified if its cited URL is one the system actually retrieved. Otherwise the system downgrades it automatically.
 6a. If the business publishes a contact email on a retrieved page, the system records it with its source and uses it as the default recipient. An email address that does not appear word for word in a retrieved page is discarded.
-7. The system builds a single-page demo website for the prospect: hero, services, about, contact. The page carries a visible notice that it is a concept demo and not the business's official site.
+7. The system builds a single-page demo website for the business in the chosen language: header with call button, hero, three website benefits, services with icons, about with address and opening hours, an appointment request form, an embedded map with the shop's location, directions link, and a WhatsApp button when a phone number is known. Services found in research are shown as they are; typical services added to fill the page are labelled as examples. The copy contains no superlatives or quality claims. The page carries a visible notice that it is a concept demo and not the business's official site.
+7a. Business details already on record (entered by the user or from the map listing) are shown in the research as verified, with their origin. Search results about other businesses with similar names are ignored. A phone number or email found in research is used only if it appears in the cited page.
 8. Contact details on the demo come only from the prospect record entered by the user, never from generated text.
 9. The system drafts a proposal, an outreach email containing the demo link, a follow-up and a social post.
 10. The email always includes the sender's identity and an opt-out line.
@@ -144,6 +145,7 @@ search       template              (after approval)
 | Dashboard | Streamlit | Free, open source |
 | Data models and validation | Pydantic | Free, open source |
 | LLM | Groq API, model `openai/gpt-oss-120b` | Free tier |
+| Business listings and maps | OpenStreetMap (Nominatim search, map embed) | Free, open data (ODbL), 1 request per second |
 | Web research | Tavily API | Free tier |
 | Website rendering | Jinja2 template | Free, open source |
 | Email | SMTP (Brevo free plan or any SMTP account) | Free tier |
@@ -212,7 +214,8 @@ These are plans, not validated figures. The first validation step after the hack
 
 - Research quality depends on what is publicly findable. A business with a common name may return results about a different business; the user must review the evidence before building on it.
 - Free-tier rate limits can slow or block the language model (the free tier allows about 8,000 tokens per minute per model). The system waits and retries, uses a smaller model for light steps, and the template fallback keeps the later stages running.
-- Small towns often have few independent businesses with any web presence; client search may find only chain branches there and says so.
+- Map coverage varies. Some towns have few or no shops on OpenStreetMap (for example Estella-Lizarra had no phone shops mapped), and listings can be out of date. The app says so and offers the known-client path; every result links to Google Maps for a check.
+- The web check for a business's own website matches the business name in the domain, so it can occasionally match a different business with the same name.
 - Storage on Streamlit Community Cloud is temporary, so missions and demo links on the hosted app do not survive a restart.
 - "No website found" is an inference from search results, not proof, and is labelled Likely.
 - Outreach law differs by country. The MVP sends one human-approved email with identity and opt-out; a compliance layer is needed before any larger volume.
@@ -230,3 +233,5 @@ These are plans, not validated figures. The first validation step after the hack
 - **Analytics:** opportunities found, demos built, replies, projects won.
 - **Quotes and estimates** generated from the requirements.
 - **More languages** for demos and outreach.
+- **Contribute back to OpenStreetMap:** suggest missing shops found by users.
+- **Licensed business data** (paid place APIs) where map coverage is thin.

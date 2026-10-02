@@ -37,33 +37,31 @@ On the first screen, choose **"Find potential clients for me"** and fill in:
 | Field | Example | Required |
 |---|---|---|
 | What can you build? | "I build websites and online booking for local shops" | Yes |
-| Type of business to target | "Mobile shops" | Yes |
+| Type of business to target | "Mobile phone shops" | Yes |
 | Country | "Spain" | Yes |
-| City | "Pamplona" | No, but gives much better results |
-| Language for the demo and email | Spanish, for a shop in Spain | Pre-set |
+| City or town | "Pamplona" | Recommended |
+| Language for the demo site and email | Leave on **Auto**: Spain gives Spanish, France gives French, and so on | Pre-set |
 | Your name, your business name | Used to sign the email | No |
 
-Press **Find potential clients**. It takes up to a minute.
+Press **Find potential clients**. It can take up to a minute.
 
 ### Step 2 — Choose a business
 
-ForgeFlow shows the businesses it found **and checked**. For each one it searched again to confirm:
+ForgeFlow looks your town up on **OpenStreetMap**, a free public map, and lists the businesses of that type mapped there, with their **street address**. For each one it also:
 
-- it really is the type of business you asked for,
-- it is located in your city (you see the address it found),
-- it is not a branch of a big chain (chains already have corporate websites),
-- it has its own website, map listing or social page (businesses found only in old directories are left out, because they may have closed),
-- whether it already has its own website.
+- sets aside branches of chains and phone operators (they already have corporate websites), with the reason,
+- checks the web for a website of its own,
+- notes when the listing has a phone number, email or opening hours.
 
-Businesses **without** a website are shown first, because they are the best targets for a website offer. Those that already have one are in a separate, lower-priority section. Businesses that failed a check are listed under **"Left out after checking"** with the reason.
+Businesses **without** a website come first, because they are the best targets for a website offer. Those that already have one are in a separate, lower-priority section.
 
-Before you choose, press **Check it on Google Maps** to make sure the shop is really there. Web listings can be out of date.
+Before you choose, press **Check it on Google Maps** to make sure the shop is really there. Map listings can be out of date.
 
 Press **Select** on the business you want.
 
-> **Tip:** small towns often have only chain stores online. If nothing suitable is found, try the nearest larger town.
+> **If nothing is found:** some towns have few shops on the map yet. If you know a business there, use the second option below.
 
-> **Already know the business?** On the first screen choose **"I already have a client in mind"** and type its name and any details you know.
+> **Already know the business?** On the first screen choose **"I already have a client in mind"**. Only three things are required: what you can build, the business name and the country. Add the town, the address as shown on Google Maps, the phone and the email if you have them: the more you add, the better the demo. The type of business is optional. ForgeFlow also looks the shop up on the map to place it exactly.
 
 ### Step 3 — Research (tab "Research & Evidence")
 
@@ -80,7 +78,7 @@ If the business publishes an email address on a public page, ForgeFlow picks it 
 
 ### Step 4 — Sample website (tab "Demo")
 
-Press **Build demo**. The Builder makes a one-page website for the business: name, services, about, contact. You get:
+Press **Build demo**. The Builder makes a modern one-page website for the business, in the client's language, with a call button, services, opening hours, an appointment request form, a map showing the shop, directions, and a WhatsApp button when the phone number is known. If research found only a few services, typical ones are added and clearly labelled as examples. You get:
 
 - a preview inside the app,
 - a **shareable link** you can open on any phone or computer,

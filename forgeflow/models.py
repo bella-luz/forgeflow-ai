@@ -16,8 +16,8 @@ class EvidenceStatus(str, Enum):
 
 class OfferProfile(BaseModel):
     capabilities: str = Field(min_length=3)
-    industry: str = Field(min_length=2)
-    country: str = Field(min_length=2)
+    industry: str = ""
+    country: str = ""
     city: str = ""
     price_range: str = ""
     language: str = "English"
@@ -33,6 +33,10 @@ class Prospect(BaseModel):
     email: str = ""
     phone: str = ""
     address: str = ""
+    opening_hours: str = ""
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    map_url: str = ""
     notes: str = ""
 
 
@@ -45,6 +49,13 @@ class Candidate(BaseModel):
     source_url: str = ""
     location_quote: str = ""
     presence_url: str = ""
+    address: str = ""
+    phone: str = ""
+    email: str = ""
+    opening_hours: str = ""
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    found_on: str = "web search"
     note: str = ""
 
 
@@ -73,28 +84,39 @@ class OpportunityReport(BaseModel):
     recommended_solution: str
     contact_email: str = ""
     contact_email_source: str = ""
+    contact_phone: str = ""
+    contact_phone_source: str = ""
     sources: list[Source] = []
 
 
 class ServiceItem(BaseModel):
     name: str
     description: str = ""
+    example: bool = False
 
 
 class DemoSpec(BaseModel):
     """Structured description of the demo site. The HTML is rendered from this, never written by the LLM."""
 
     business_name: str
+    eyebrow: str = ""
     tagline: str
     hero_text: str
     about: str
     services: list[ServiceItem] = []
-    highlights: list[str] = []
+    highlights: list[ServiceItem] = []
     cta_text: str = "Get in touch"
+    booking_title: str = ""
+    booking_text: str = ""
     language: str = "English"
     address: str = ""
     phone: str = ""
     email: str = ""
+    opening_hours: str = ""
+    whatsapp: str = ""
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    accent: str = "#1f5eff"
     prepared_by: str = ""
 
 

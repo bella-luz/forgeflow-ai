@@ -78,13 +78,20 @@ def run_research(state: WorkflowState) -> bool:
             report = load_fixture()["report"]
             note = "bundled sample research used (demo mode)"
         else:
-            report = hunter.research(state.offer, state.prospect)
+            prospect, found = hunter.enrich(state.prospect)
+            report = hunter.research(state.offer, prospect)
+            state.prospect = prospect
             note = ""
+            if found:
+                _log(state, HUNTER, "ok", f"OpenStreetMap: {found}.")
         _clear_from(state, "report")
         state.report = report
         if report.contact_email and not state.prospect.email:
             state.prospect.email = report.contact_email
-            note = f"public contact email found on {report.contact_email_source}".strip()
+            _log(state, HUNTER, "ok", f"Public contact email found on {report.contact_email_source}.")
+        if report.contact_phone and not state.prospect.phone:
+            state.prospect.phone = report.contact_phone
+            _log(state, HUNTER, "ok", f"Public phone number found on {report.contact_phone_source}.")
         return note
 
     return _step(state, HUNTER, "Opportunity report ready.", action)

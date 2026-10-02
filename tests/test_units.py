@@ -18,6 +18,7 @@ from forgeflow.models import (
     WorkflowState,
 )
 from forgeflow.tools import email as email_tool
+from forgeflow.tools import places
 from forgeflow.tools import search as search_tool
 
 
@@ -241,9 +242,15 @@ def test_reply_heuristics():
 
 
 # --- hunt mode ---
-def test_discover_without_keys_fails_clearly():
-    with pytest.raises(hunter.AgentError, match="TAVILY_API_KEY"):
+def test_discover_reports_unknown_place(monkeypatch):
+    monkeypatch.setattr(places, "geocode", lambda text: None)
+    with pytest.raises(hunter.AgentError, match="Could not find"):
         hunter.discover(OFFER)
+
+
+def test_web_discovery_without_keys_fails_clearly():
+    with pytest.raises(hunter.AgentError, match="TAVILY_API_KEY"):
+        hunter._discover_web(OFFER)
 
 
 HUNT_OFFER = OfferProfile(capabilities="websites", industry="Mobile shops", country="Spain", city="Estella-Lizarra")
@@ -297,7 +304,7 @@ def test_discover_verifies_type_location_and_website(monkeypatch):
         return chat(__import__("json").dumps(found if system.startswith("You pick out") else checks))
 
     monkeypatch.setattr("requests.post", fake_post)
-    hunt = hunter.discover(HUNT_OFFER)
+    hunt = hunter._discover_web(HUNT_OFFER)
     got = hunt.candidates
     # Distribuidora: place not in its result. Invented: not named in the result. Both dropped before checking.
     assert [c.name for c in got] == ["Tienda Luna", "Movil Rapido"]  # no own website listed first
@@ -336,4 +343,139 @@ def test_discover_with_failed_search_reports_it(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "k")
     monkeypatch.setattr("requests.post", lambda *a, **k: FakeResponse(500))
     with pytest.raises(hunter.AgentError, match="returned nothing"):
-        hunter.discover(OFFER)
+        hunter._discover_web(OFFER)
+
+
+# --- map-based discovery and enrichment ---
+AREA = places.Area(name="Pamplona", south=42.7, north=42.9, west=-1.8, east=-1.5)
+
+
+def test_nominatim_item_is_parsed():
+    item = {
+        "name": "Max Móvil", "category": "shop", "type": "mobile_phone", "lat": "42.81", "lon": "-1.64",
+        "osm_type": "node", "osm_id": 5,
+        "address": {"road": "Calle Paulino Caballero", "house_number": "26", "postcode": "31002", "city": "Pamplona"},
+        "extratags": {"website": "maxmovil.es", "email": "not-an-email", "phone": "+34 948 000 000;+34 600 000 000"},
+    }
+    p = places.to_place(item)
+    assert p.address == "Calle Paulino Caballero 26, 31002 Pamplona"
+    assert p.website == "https://maxmovil.es" and p.email == "" and p.phone == "+34 948 000 000"
+    assert p.osm_url == "https://www.openstreetmap.org/node/5" and p.lat == 42.81
+    assert places.to_place({"name": ""}) is None
+
+
+def test_map_discovery_sets_chains_aside_and_checks_websites(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "k")  # no LLM key: no AI phrases and no web fallback
+    shops = [
+        places.Place(name="Hajra Moviles", category="shop=mobile_phone", address="Av. Carlos III 45", osm_url="https://www.openstreetmap.org/node/1"),
+        places.Place(name="Phone House", category="shop=mobile_phone", osm_url="https://www.openstreetmap.org/node/2"),
+        places.Place(name="Max Movil", category="shop=mobile_phone", osm_url="https://www.openstreetmap.org/node/3"),
+        places.Place(name="Celular Uno", category="shop=mobile_phone", brand="Q123", osm_url="https://www.openstreetmap.org/node/4"),
+        places.Place(name="Tienda Web", category="shop=mobile_phone", website="https://tiendaweb.es", osm_url="https://www.openstreetmap.org/node/5"),
+    ]
+    monkeypatch.setattr(places, "geocode", lambda text: AREA)
+    monkeypatch.setattr(places, "search_in_area", lambda phrase, area: shops)
+
+    def fake_post(url, json=None, **kwargs):
+        if '"Max Movil"' in json["query"]:
+            return FakeResponse(200, {"results": [{"title": "Max Movil", "url": "https://www.maxmovil.es/contacto", "content": ""}]})
+        return FakeResponse(200, {"results": [{"title": "Hajra", "url": "https://www.facebook.com/hajra", "content": ""}]})
+
+    monkeypatch.setattr("requests.post", fake_post)
+    hunt = hunter.discover(OfferProfile(capabilities="websites", industry="Mobile shops", country="Spain", city="Pamplona"))
+    assert [c.name for c in hunt.candidates] == ["Hajra Moviles", "Max Movil", "Tienda Web"]
+    assert hunt.candidates[0].website == "" and hunt.candidates[0].address == "Av. Carlos III 45"
+    assert hunt.candidates[1].website == "https://www.maxmovil.es"
+    assert {c.name for c in hunt.rejected} == {"Phone House", "Celular Uno"}
+    assert all(c.found_on == "OpenStreetMap" for c in hunt.candidates)
+
+
+def test_enrich_fills_gaps_but_keeps_user_values(monkeypatch):
+    listing = places.Place(name="5G Mobiles", phone="+34 948 111 111", website="https://5gmobiles.es", opening_hours="Mo-Sa 10:00-20:00",
+                           address="Calle Mayor 1, Estella", lat=42.67, lon=-2.03, osm_url="https://www.openstreetmap.org/node/9")
+    monkeypatch.setattr(places, "lookup", lambda text: listing)
+    prospect = Prospect(name="5G Mobiles", city="Estella-Lizarra", country="Spain", phone="+34 600 000 000", address="Calle Mayor 1")
+    enriched, note = hunter.enrich(prospect)
+    assert enriched.phone == "+34 600 000 000" and enriched.address == "Calle Mayor 1"
+    assert enriched.website == "https://5gmobiles.es" and enriched.lat == 42.67 and enriched.map_url.endswith("/node/9")
+    assert "map listing" in note
+
+
+def test_enrich_ignores_a_different_business(monkeypatch):
+    monkeypatch.setattr(places, "lookup", lambda text: places.Place(name="Vodafone", website="https://vodafone.es", lat=1.0, lon=1.0))
+    monkeypatch.setattr(places, "locate", lambda text: (42.67, -2.03))
+    enriched, note = hunter.enrich(Prospect(name="5G Mobiles", country="Spain", address="Calle Mayor 1, Estella"))
+    assert enriched.website == "" and enriched.map_url == "" and enriched.lat == 42.67
+
+
+def test_research_uses_known_details_when_search_finds_nothing_relevant(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "k")
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    draft = {"summary": "No search result is about this shop.", "recommended_solution": "A website.",
+             "need_signals": [{"claim": "No website of its own was found", "status": "LIKELY"}]}
+
+    def fake_post(url, **kwargs):
+        if "tavily" in url:
+            return FakeResponse(200, {"results": [{"title": "Movistar", "url": "https://movistar.example", "content": "other shop"}]})
+        return chat(json.dumps(draft))
+
+    monkeypatch.setattr("requests.post", fake_post)
+    report = hunter.research(OFFER, Prospect(name="5G Mobiles", city="Estella", country="Spain", address="Calle Mayor 1", phone="+34 600"))
+    claims = [f.claim for f in report.business_facts]
+    assert claims == ["Address: Calle Mayor 1", "Phone: +34 600"]
+    assert all(f.status == EvidenceStatus.VERIFIED and f.excerpt == "Entered by you" for f in report.business_facts)
+
+
+# --- languages and demo site ---
+from forgeflow import i18n  # noqa: E402
+
+
+@pytest.mark.parametrize("country,language", [("Spain", "Spanish"), ("españa", "Spanish"), ("France", "French"), ("Pakistan", "English"), ("", "English")])
+def test_language_follows_country(country, language):
+    assert i18n.resolve(i18n.AUTO, country) == language
+    assert i18n.resolve("German", country) == "German"
+
+
+def test_whatsapp_number():
+    assert i18n.whatsapp_number("948 55 12 34", "Spain") == "34948551234"
+    assert i18n.whatsapp_number("+34 600 11 22 33", "") == "34600112233"
+    assert i18n.whatsapp_number("12345", "Spain") == ""
+    assert i18n.whatsapp_number("948 55 12 34", "Atlantis") == ""
+
+
+def test_demo_site_has_map_booking_whatsapp_and_marks_examples():
+    spec = DemoSpec(
+        business_name="5G Mobiles", tagline="T", hero_text="H", about="A", language="Spanish",
+        services=[ServiceItem(name="Reparación de pantallas"), ServiceItem(name="Fundas", example=True)],
+        booking_title="Pida su cita", address="Calle Mayor 1, Estella", phone="948 55 12 34", whatsapp="34948551234",
+        lat=42.67, lon=-2.03,
+    )
+    html = builder.render(spec)
+    assert "openstreetmap.org/export/embed.html" in html and "marker=42.67,-2.03" in html
+    assert 'href="https://wa.me/34948551234"' in html and 'href="tel:948551234"' in html
+    assert 'id="booking"' in html and "Servicios de ejemplo" in html and 'lang="es"' in html
+
+
+def test_demo_site_without_coordinates_uses_address_search():
+    html = builder.render(DemoSpec(business_name="Shop", tagline="T", hero_text="H", about="A", address="Calle Mayor 1, Estella"))
+    assert "maps.google.com/maps?q=Shop%2C%20Calle%20Mayor%201%2C%20Estella&amp;output=embed" in html
+    assert "wa.me" not in html and "Example services" not in html
+
+
+def test_research_keeps_a_phone_only_if_it_appears_in_the_cited_result(monkeypatch):
+    monkeypatch.setenv("TAVILY_API_KEY", "k")
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+
+    def run_with(phone):
+        draft = {"summary": "s", "recommended_solution": "r", "contact_phone": phone, "contact_phone_source": "https://shop.example"}
+
+        def fake_post(url, **kwargs):
+            if "tavily" in url:
+                return FakeResponse(200, {"results": [{"title": "Shop", "url": "https://shop.example", "content": "Llámanos: 948 54 39 54"}]})
+            return chat(json.dumps(draft))
+
+        monkeypatch.setattr("requests.post", fake_post)
+        return hunter.research(OFFER, PROSPECT)
+
+    assert run_with("+34 948 54 39 54").contact_phone == "+34 948 54 39 54"
+    assert run_with("+34 600 00 00 00").contact_phone == ""

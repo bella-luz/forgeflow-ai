@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 
+from .. import i18n
 from ..llm import complete_json
 from ..models import (
     CustomerReplyAnalysis,
@@ -39,10 +40,6 @@ REPLY_SYSTEM = """You analyse a customer's reply to a website proposal. Extract 
 - suggested_response: a short, polite draft answer that does not promise prices or dates.
 Never attribute a requirement to the customer that is not in their reply."""
 
-OPT_OUT = {
-    "English": 'If you would rather not hear from me again, reply "no thanks" and I will not contact you further.',
-    "Spanish": 'Si prefiere no recibir más mensajes, responda "no, gracias" y no volveré a escribirle.',
-}
 
 
 def finalize_email(body: str, demo_url: str, offer: OfferProfile) -> str:
@@ -53,7 +50,7 @@ def finalize_email(body: str, demo_url: str, offer: OfferProfile) -> str:
     signature = "\n".join(p for p in (offer.sender_name, offer.sender_business) if p)
     if signature:
         body += f"\n\n{signature}"
-    return f"{body}\n\n{OPT_OUT.get(offer.language, OPT_OUT['English'])}"
+    return f"{body}\n\n{i18n.OPT_OUT.get(offer.language, i18n.OPT_OUT['English'])}"
 
 
 def _template_outreach(offer: OfferProfile, prospect: Prospect, report: OpportunityReport, demo_url: str) -> OutreachDraft:

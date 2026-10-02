@@ -24,5 +24,6 @@ def isolated(monkeypatch, tmp_path):
         raise AssertionError("unexpected network call in a test")
 
     monkeypatch.setattr("requests.post", blocked)
+    monkeypatch.setattr("requests.get", blocked)
     monkeypatch.setattr("smtplib.SMTP", blocked)
     monkeypatch.setattr(llm, "time", SimpleNamespace(sleep=lambda s: None))

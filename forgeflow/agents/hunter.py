@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from .. import config
 from ..llm import LLMError, complete_json
 from ..models import Candidate, EvidenceItem, HuntResult, EvidenceStatus, OfferProfile, OpportunityReport, Prospect, Source
+from ..tools import places
 from ..tools import search as search_tool
 from ..tools.search import SearchResult
 from . import AgentError
@@ -31,7 +32,13 @@ Rules:
 - recommended_solution: one short paragraph proposing what the builder should offer, tied to the need_signals.
 - contact_email: a business email address only if it appears word for word in a result, with that result's URL in \
 contact_email_source. Otherwise leave both empty.
-- If the results are about a different business, say so in summary and mark items INSUFFICIENT."""
+- contact_phone: the business's phone number only if it appears in a result about this business, copied exactly, \
+with that result's URL in contact_phone_source. Otherwise leave both empty.
+- known_details are confirmed (entered by the user or taken from the business's map listing). They are added to the \
+report automatically, so do not repeat them in business_facts. Use them to tell which search results are about this \
+business: results about a different business with a similar name, another branch or another town must be ignored.
+- If no search result is about this business, say so in summary, keep business_facts empty, and base need_signals on \
+what is missing (for example: no website of its own was found)."""
 
 
 class _Draft(BaseModel):
@@ -42,6 +49,12 @@ class _Draft(BaseModel):
     recommended_solution: str
     contact_email: str = ""
     contact_email_source: str = ""
+    contact_phone: str = ""
+    contact_phone_source: str = ""
+
+
+def _digits(text: str) -> str:
+    return re.sub(r"\D", "", text or "")
 
 
 def _norm(url: str) -> str:
@@ -77,16 +90,57 @@ def gather(prospect: Prospect) -> tuple[list[SearchResult], list[str]]:
             errors.append(f"website: {exc}")
 
     place = " ".join(p for p in (prospect.city, prospect.country) if p)
-    for query in (f'"{prospect.name}" {place}', f"{prospect.name} {place} reviews contact opening hours"):
-        outcome = search_tool.search(query.strip())
-        results += outcome.results
-        if not outcome.ok:
-            errors.append(f"search: {outcome.error}")
+    queries = [f'"{prospect.name}" {place}'.strip(), f"{prospect.name} {place} opiniones reviews contact".strip()]
+    if prospect.address:
+        queries.insert(0, f'"{prospect.name}" {prospect.address}')
+    batches, errs = _search_all(queries, 5)
+    errors += [f"search: {e}" for e in errs]
+    for batch in batches:
+        results += batch
 
     unique: dict[str, SearchResult] = {}
     for r in results:
         unique.setdefault(_norm(r.url), r)
     return list(unique.values()), errors
+
+
+def _similar_names(a: str, b: str) -> bool:
+    fa, fb = _flat(a), _flat(b)
+    if fa in fb or fb in fa:
+        return True
+    wa = {w for w in re.findall(r"\w+", fa) if len(w) >= 3}
+    wb = {w for w in re.findall(r"\w+", fb) if len(w) >= 3}
+    return bool(wa & wb - GENERIC_WORDS)
+
+
+def enrich(prospect: Prospect) -> tuple[Prospect, str]:
+    """Fill gaps from the business's OpenStreetMap listing. User-entered values are never overwritten."""
+    if prospect.map_url and prospect.lat is not None:
+        return prospect, ""
+    where = ", ".join(x for x in (prospect.address or prospect.city, prospect.country) if x)
+    place = places.lookup(f"{prospect.name}, {where}") if where else None
+    if place and _similar_names(place.name, prospect.name):
+        updates = {k: getattr(place, k) for k in ("website", "phone", "email", "opening_hours") if not getattr(prospect, k) and getattr(place, k)}
+        updates.update(lat=place.lat, lon=place.lon, map_url=place.osm_url)
+        if not prospect.address and place.address:
+            updates["address"] = place.address
+        filled = ", ".join(k.replace("_", " ") for k in updates if k not in ("lat", "lon", "map_url"))
+        return prospect.model_copy(update=updates), f"map listing found{': added ' + filled if filled else ''}"
+    if prospect.address and prospect.lat is None:
+        coords = places.locate(f"{prospect.address}, {prospect.country}")
+        if coords:
+            return prospect.model_copy(update={"lat": coords[0], "lon": coords[1]}), "address located on the map"
+    return prospect, ""
+
+
+def known_facts(prospect: Prospect) -> list[EvidenceItem]:
+    """Details on record for the business, shown as verified with where they came from."""
+    origin = "From the business's OpenStreetMap listing or entered by you" if prospect.map_url else "Entered by you"
+    items = []
+    for label, value in (("Address", prospect.address), ("Phone", prospect.phone), ("Opening hours", prospect.opening_hours), ("Website", prospect.website)):
+        if value:
+            items.append(EvidenceItem(claim=f"{label}: {value}", status=EvidenceStatus.VERIFIED, source_url=prospect.map_url, excerpt=origin))
+    return items
 
 
 def research(offer: OfferProfile, prospect: Prospect) -> OpportunityReport:
@@ -97,15 +151,17 @@ def research(offer: OfferProfile, prospect: Prospect) -> OpportunityReport:
         raise AgentError("Live research needs an LLM key (GROQ_API_KEY). Use demo mode or add the key.")
 
     results, errors = gather(prospect)
-    if not results:
+    known = known_facts(prospect)
+    if not results and not known:
         raise AgentError("Research found no public information. " + "; ".join(errors))
 
     user = json.dumps(
         {
             "builder_offer": offer.capabilities,
-            "target_industry": offer.industry,
-            "prospect": prospect.model_dump(include={"name", "website", "city", "country", "notes"}),
-            "search_results": [r.model_dump() for r in results],
+            "business_type": offer.industry,
+            "prospect": prospect.model_dump(include={"name", "city", "country", "notes"}),
+            "known_details": [k.claim for k in known],
+            "search_results": _brief_results(results, 1200),
         },
         ensure_ascii=False,
     )
@@ -120,17 +176,24 @@ def research(offer: OfferProfile, prospect: Prospect) -> OpportunityReport:
         if email and config.valid_email(email) and email.lower() in r.content.lower():
             email_source = r.url
             break
+    # A phone number is kept only if its digits appear in the result cited for it.
+    phone, phone_source = draft.contact_phone.strip(), ""
+    cited = next((r for r in results if _norm(r.url) == _norm(draft.contact_phone_source)), None)
+    if len(_digits(phone)) >= 8 and cited and _digits(phone)[-9:] in _digits(cited.content + cited.title):
+        phone_source = cited.url
+    sources = [Source(title="OpenStreetMap listing", url=prospect.map_url)] if prospect.map_url else []
     return OpportunityReport(
         contact_email=email if email_source else "",
         contact_email_source=email_source,
+        contact_phone=phone if phone_source else "",
+        contact_phone_source=phone_source,
         summary=draft.summary,
-        business_facts=enforce_evidence(draft.business_facts, urls),
+        business_facts=known + enforce_evidence(draft.business_facts, urls),
         need_signals=enforce_evidence(draft.need_signals, urls),
         services=draft.services,
         recommended_solution=draft.recommended_solution,
-        sources=[Source(title=r.title, url=r.url) for r in results],
+        sources=sources + [Source(title=r.title, url=r.url) for r in results],
     )
-
 
 
 # --- Hunt Mode ---------------------------------------------------------------------
@@ -252,7 +315,7 @@ def _search_all(queries: list[str], max_results: int) -> tuple[list[list[SearchR
     return [o.results for o in outcomes], [o.error for o in outcomes if not o.ok]
 
 
-def discover(offer: OfferProfile) -> HuntResult:
+def _discover_web(offer: OfferProfile) -> HuntResult:
     """Hunt Mode: find businesses matching the offer, then verify each one with its own search.
 
     A business is accepted only if it is named in a retrieved result, is the target type, is not a chain branch,
@@ -352,10 +415,123 @@ def discover(offer: OfferProfile) -> HuntResult:
             except ValueError:
                 pass
         candidate = Candidate(
-            name=c.name, website=website, why=c.why, source_url=source.url,
+            name=c.name, website=website, why=c.why, source_url=source.url, found_on="web search",
             location_quote=ch.location_quote.strip() if ch else "", note=reason.strip(),
             presence_url="" if reason else presence,
         )
         (rejected if reason else kept).append(candidate)
 
     return HuntResult(candidates=sorted(kept, key=lambda c: bool(c.website)), rejected=rejected)
+
+
+MAP_SYSTEM = """Turn a business type into OpenStreetMap search phrases. Return up to 3 short English phrases naming \
+the matching OpenStreetMap shop or amenity category, most specific first. Examples: "mobile phone shop", \
+"hairdresser", "dentist", "bakery", "car repair", "restaurant"."""
+
+
+class _Phrases(BaseModel):
+    phrases: list[str] = []
+
+
+# Words too common to identify a business by.
+GENERIC_WORDS = {
+    "movil", "moviles", "mobile", "mobiles", "phone", "phones", "telefonia", "tienda", "shop", "store", "tech",
+    "informatica", "electronica", "repair", "reparacion", "the", "and", "los", "las", "del", "para", "center", "centre",
+    "service", "services", "servicio", "servicios", "plus", "smart", "online", "spain", "espana",
+}
+
+# Chains and network operators (any country). Their branches already have corporate websites.
+CHAIN_NAMES = (
+    "phone house", "movistar", "vodafone", "orange", "yoigo", "masmovil", "maslife", "jazztel", "simyo", "lowi",
+    "digi", "pepephone", "lebara", "lycamobile", "tecnyshop", "k tuin", "ktuin", "media markt", "mediamarkt", "fnac",
+    "worten", "el corte ingles", "telecor", "apple store", "samsung", "xiaomi", "huawei", "euskaltel", "telefonica",
+    "cash converters", "carrefour", "tecnogallery", "o2", "ee", "three", "carphone warehouse", "jazz", "telenor",
+    "zong", "ufone", "t mobile", "verizon", "at&t", "bouygues", "sfr", "free mobile", "tim", "wind tre", "mcdonald",
+    "burger king", "starbucks", "zara", "mercadona", "lidl", "aldi", "dia",
+)
+
+
+def _is_chain(name: str, brand: str = "") -> bool:
+    if brand:
+        return True
+    flat = " " + re.sub(r"[^a-z0-9&]+", " ", _flat(name)) + " "
+    return any(f" {c} " in flat for c in CHAIN_NAMES)
+
+
+def _own_site(name: str, results: list[SearchResult]) -> str:
+    """A result that looks like the business's own website: not a directory, and its domain carries the name."""
+    words = [w for w in re.findall(r"\w+", _flat(name)) if len(w) >= 4 and w not in GENERIC_WORDS]
+    slug = re.sub(r"[^a-z0-9]", "", _flat(name))
+    for r in results:
+        host = (urlparse(r.url).hostname or "").lower()
+        if _is_directory(r.url):
+            continue
+        if (len(slug) >= 5 and slug in host.replace("-", "")) or any(w in host for w in words):
+            return f"{urlparse(r.url).scheme}://{host}"
+    return ""
+
+
+def _map_phrases(offer: OfferProfile) -> list[str]:
+    phrases: list[str] = []
+    if config.llm_available():
+        try:
+            got = complete_json(MAP_SYSTEM, json.dumps({"business_type": offer.industry}, ensure_ascii=False), _Phrases, temperature=0, fast=True)
+            phrases = [p.strip() for p in got.phrases if p.strip()][:3]
+        except LLMError:
+            pass
+    return phrases + [offer.industry] if offer.industry not in phrases else phrases
+
+
+def discover(offer: OfferProfile) -> HuntResult:
+    """Hunt Mode. OpenStreetMap listings first (real premises with addresses); web search fills in if the map has few.
+
+    Chains are set aside. For map listings without a website, a web search checks for one.
+    Businesses without their own website come first.
+    """
+    if not offer.industry or not offer.country:
+        raise AgentError("Enter the type of business and the country to search.")
+    place = ", ".join(p for p in (offer.city, offer.country) if p)
+    hunt = HuntResult()
+
+    area = places.geocode(place)
+    if area:
+        found: dict[str, places.Place] = {}
+        for phrase in _map_phrases(offer):
+            for pl in places.search_in_area(phrase, area):
+                found.setdefault(pl.osm_url or _flat(pl.name), pl)
+        for pl in found.values():
+            c = Candidate(
+                name=pl.name, website=pl.website, address=pl.address, phone=pl.phone, email=pl.email,
+                opening_hours=pl.opening_hours, lat=pl.lat, lon=pl.lon, presence_url=pl.osm_url,
+                source_url=pl.osm_url, found_on="OpenStreetMap",
+                why=f"Listed on the map as a {pl.category.split('=')[-1].replace('_', ' ')}"
+                    + ("." if pl.website else ", with no website on its listing."),
+            )
+            if _is_chain(pl.name, pl.brand):
+                hunt.rejected.append(c.model_copy(update={"note": "Branch of a chain or network operator, so it already has a corporate website."}))
+            else:
+                hunt.candidates.append(c)
+
+        # Map listings often lack the website field: check the web for one.
+        unchecked = [c for c in hunt.candidates if not c.website][:10]
+        if unchecked and config.search_available():
+            batches, _ = _search_all([f'"{c.name}" {offer.city or offer.country}' for c in unchecked], 4)
+            for c, batch in zip(unchecked, batches):
+                site = _own_site(c.name, batch)
+                if site:
+                    c.website = site
+                    c.why = "Listed on the map. A website of its own was found online."
+
+    if len(hunt.candidates) < 3 and config.search_available() and config.llm_available():
+        try:
+            web = _discover_web(offer)
+        except AgentError:
+            web = HuntResult()
+        have = {_flat(c.name) for c in hunt.candidates + hunt.rejected}
+        hunt.candidates += [c for c in web.candidates if _flat(c.name) not in have]
+        hunt.rejected += [c for c in web.rejected if _flat(c.name) not in have]
+
+    if area is None and not hunt.candidates and not hunt.rejected:
+        raise AgentError(f"Could not find {place} on the map. Check the spelling of the city and country.")
+    hunt.candidates.sort(key=lambda c: (bool(c.website), c.found_on != "OpenStreetMap"))
+    return hunt

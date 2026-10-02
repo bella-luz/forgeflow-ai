@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import quote_plus
 
 import streamlit as st
 import streamlit.components.v1 as components
-from pydantic import ValidationError
 
-from forgeflow import config, orchestrator, store
+from forgeflow import config, i18n, orchestrator, store
 from forgeflow.agents import AgentError, hunter
-from urllib.parse import quote_plus
-
+from forgeflow.tools import places
 from forgeflow.models import EvidenceItem, HuntResult, OfferProfile, Prospect, WorkflowState
 
 config.load_env()
@@ -115,43 +114,46 @@ MODES = [
     "I already have a client in mind",
     "Demo mode (sample client, no API keys needed)",
 ]
+LANG_OPTIONS = [i18n.AUTO] + i18n.LANGUAGES
 
 
-def offer_fields(d: OfferProfile | None) -> dict:
+def sender_fields(d: OfferProfile | None) -> dict:
     return {
-        "capabilities": st.text_area("What can you build? *", d.capabilities if d else "", placeholder="I build professional websites and booking systems for local shops.").strip(),
-        "industry": st.text_input("Type of business to target *", d.industry if d else "", placeholder="Mobile phone shops").strip(),
-        "country": st.text_input("Country *", d.country if d else "").strip(),
-        "city": st.text_input("City (optional, gives better results)", d.city if d else "").strip(),
-        "language": st.selectbox("Language for the demo and email", ["English", "Spanish"]),
+        "language": st.selectbox(
+            "Language for the demo site and email", LANG_OPTIONS,
+            help="Auto uses the main language of the client's country, or English if unknown.",
+        ),
         "sender_name": st.text_input("Your name (optional, signs the email)", d.sender_name if d else "").strip(),
         "sender_business": st.text_input("Your business name (optional)", d.sender_business if d else "").strip(),
     }
 
 
-def make_offer(fields: dict) -> OfferProfile | None:
-    try:
-        return OfferProfile(**fields)
-    except ValidationError:
-        st.error("Please fill in the three fields marked *.")
-        return None
-
-
 def hunt_form() -> None:
-    st.write("Describe what you can build. ForgeFlow searches for businesses that could need it.")
+    st.write("Describe what you can build. ForgeFlow finds businesses on the map that could need it, and checks each one.")
     with st.form("hunt"):
-        fields = offer_fields(None)
+        capabilities = st.text_area("What can you build? *", placeholder="I build professional websites and booking systems for local shops.").strip()
+        industry = st.text_input("Type of business to target *", placeholder="Mobile phone shops").strip()
+        left, right = st.columns(2)
+        country = left.text_input("Country *").strip()
+        city = right.text_input("City or town (recommended)").strip()
+        sender = sender_fields(None)
         submitted = st.form_submit_button("Find potential clients", type="primary")
     if submitted:
         st.session_state.pop("candidates", None)
-        offer = make_offer(fields)
-        if offer:
-            with st.spinner("Searching and checking each business. This can take up to a minute on the free AI tier..."):
-                try:
-                    st.session_state["candidates"] = hunter.discover(offer)
-                    st.session_state["hunt_offer"] = offer
-                except AgentError as exc:
-                    st.error(str(exc))
+        if len(capabilities) < 3 or not industry or not country:
+            st.error("Please fill in the three fields marked *.")
+            return
+        offer = OfferProfile(
+            capabilities=capabilities, industry=industry, country=country, city=city,
+            language=i18n.resolve(sender["language"], country),
+            sender_name=sender["sender_name"], sender_business=sender["sender_business"],
+        )
+        with st.spinner("Searching the map and checking each business. This can take up to a minute..."):
+            try:
+                st.session_state["candidates"] = hunter.discover(offer)
+                st.session_state["hunt_offer"] = offer
+            except AgentError as exc:
+                st.error(str(exc))
 
     hunt = st.session_state.get("candidates")
     if not isinstance(hunt, HuntResult):  # also discards results saved by an older version of the app
@@ -161,16 +163,15 @@ def hunt_form() -> None:
     no_site = [c for c in candidates if not c.website]
     with_site = [c for c in candidates if c.website]
     if candidates:
-        st.subheader(f"{len(candidates)} potential clients found and checked")
+        st.subheader(f"{len(candidates)} potential clients found")
         st.caption(
-            "Each business was checked with its own search: right type of business, not a chain branch, located in "
-            "your target area, and listed on a map, social page or its own website. Web listings can still be out of "
-            "date, so check it on the map before you select it."
+            "Businesses without a website come first. Chains are left out. "
+            "Listings can be out of date, so check a business on the map before you select it."
         )
     else:
         st.warning(
-            f"No suitable independent business was confirmed in {offer.city or offer.country}. "
-            "The businesses found and why they were left out are listed below. Try a nearby larger town or a broader business type."
+            f"No suitable independent {offer.industry.lower()} could be found in {offer.city or offer.country}. "
+            "The map may simply not list them yet. If you know a business there, use \"I already have a client in mind\"."
         )
     for c in no_site:
         candidate_card(c, offer, len(candidates))
@@ -179,10 +180,11 @@ def hunt_form() -> None:
             for c in with_site:
                 candidate_card(c, offer, len(candidates))
     if hunt.rejected:
-        with st.expander(f"Left out after checking ({len(hunt.rejected)})", expanded=not candidates):
+        with st.expander(f"Left out ({len(hunt.rejected)})", expanded=not candidates):
             for c in hunt.rejected:
                 st.markdown(f"**{plain(c.name)}**: {plain(c.note)}")
-                st.caption(f"Found at: {c.source_url}")
+    if any(c.found_on == "OpenStreetMap" for c in candidates + hunt.rejected):
+        st.caption(places.ATTRIBUTION)
 
 
 def candidate_card(c, offer: OfferProfile, total: int) -> None:
@@ -190,17 +192,19 @@ def candidate_card(c, offer: OfferProfile, total: int) -> None:
         left, right = st.columns([5, 1])
         with left:
             st.markdown(f"**{plain(c.name)}**")
-            st.markdown(plain(c.why))
-            if c.location_quote:
-                st.caption(f"Location evidence: {plain(c.location_quote)}")
-            st.caption(f"Own website: {c.website}" if c.website else "Own website: none found in search (not proof that none exists)")
-            if c.presence_url:
-                st.caption(f"Current listing: {c.presence_url}")
-            st.caption(f"Found at: {c.source_url}")
-            maps = "https://www.google.com/maps/search/?api=1&query=" + quote_plus(f"{c.name} {offer.city} {offer.country}")
+            if c.address or c.location_quote:
+                st.caption(f"Address: {plain(c.address or ' '.join(c.location_quote.split()))}")
+            st.caption(f"Own website: {c.website}" if c.website else "Own website: none found (not proof that none exists)")
+            details = [x for x in (("phone on listing" if c.phone else ""), ("email on listing" if c.email else ""), ("opening hours" if c.opening_hours else "")) if x]
+            st.caption(f"Found on: {c.found_on}" + (f" · {', '.join(details)}" if details else ""))
+            maps = "https://www.google.com/maps/search/?api=1&query=" + quote_plus(f"{c.name} {c.address or offer.city} {offer.country}")
             st.markdown(f"[Check it on Google Maps]({maps})")
-        if right.button("Select", key=f"pick-{c.name}", use_container_width=True):
-            client = Prospect(name=c.name, website=c.website, city=offer.city, country=offer.country)
+        if right.button("Select", key=f"pick-{c.name}-{c.source_url}", use_container_width=True):
+            client = Prospect(
+                name=c.name, website=c.website, city=offer.city, country=offer.country, email=c.email, phone=c.phone,
+                address=c.address, opening_hours=c.opening_hours, lat=c.lat, lon=c.lon,
+                map_url=c.presence_url if c.found_on == "OpenStreetMap" else "",
+            )
             note = f"Found {total} potential clients for this offer; {c.name} was selected."
             st.session_state["state"] = orchestrator.new_run(offer, client, "live", hunt_note=note)
             st.session_state.pop("candidates", None)
@@ -209,45 +213,46 @@ def candidate_card(c, offer: OfferProfile, total: int) -> None:
 
 def client_form(demo: bool) -> None:
     fixture = orchestrator.load_fixture() if demo else None
-    client_d = fixture["prospect"] if demo else None
+    d_offer = fixture["offer"] if demo else None
+    d_client = fixture["prospect"] if demo else None
 
     with st.form("mission"):
         left, right = st.columns(2)
         with left:
             st.subheader("Your offer")
-            fields = offer_fields(fixture["offer"] if demo else None)
+            capabilities = st.text_area("What can you build? *", d_offer.capabilities if demo else "", placeholder="I build professional websites and booking systems for local shops.").strip()
+            industry = st.text_input("Type of business (optional, helps the research)", d_offer.industry if demo else "", placeholder="Mobile phone shop").strip()
+            sender = sender_fields(d_offer)
         with right:
-            st.subheader("Potential client")
+            st.subheader("The client")
             if demo:
                 st.info("Sample data for a fictional business. Research results are bundled, not live.")
-            name = st.text_input("Business name *", client_d.name if demo else "", disabled=demo)
-            website = st.text_input("Website (optional)", "", disabled=demo)
-            p_city = st.text_input("City (optional)", client_d.city if demo else "", disabled=demo)
-            p_country = st.text_input("Country (optional)", client_d.country if demo else "", disabled=demo)
-            email = st.text_input("Contact email (optional, used only after your approval)", client_d.email if demo else "")
-            phone = st.text_input("Phone (optional, shown on the demo)", "")
-            address = st.text_input("Address (optional, shown on the demo)", client_d.address if demo else "")
-            notes = st.text_area("Notes (optional)", "")
+            name = st.text_input("Business name *", d_client.name if demo else "", disabled=demo).strip()
+            country = st.text_input("Country *", d_client.country if demo else "", disabled=demo).strip()
+            city = st.text_input("City or town", d_client.city if demo else "", disabled=demo).strip()
+            address = st.text_input("Address (as on Google Maps)", d_client.address if demo else "").strip()
+            phone = st.text_input("Phone", "").strip()
+            website = st.text_input("Website, if it has one", "", disabled=demo).strip()
+            email = st.text_input("Email (used only after your approval)", d_client.email if demo else "").strip()
+            notes = st.text_area("Notes (optional)", "").strip()
         submitted = st.form_submit_button("Create mission", type="primary")
 
     if not submitted:
         return
+    if len(capabilities) < 3 or len(name) < 2 or not country:
+        st.error("Please fill in the fields marked *.")
+        return
     if email and not config.valid_email(email):
-        st.error("The contact email address is not valid.")
+        st.error("The email address is not valid.")
         return
-    offer = make_offer(fields)
-    if offer is None:
-        return
+    offer = OfferProfile(
+        capabilities=capabilities, industry=industry, country=country, city=city,
+        language=i18n.resolve(sender["language"], country),
+        sender_name=sender["sender_name"], sender_business=sender["sender_business"],
+    )
+    client = Prospect(name=name, website=website, city=city, country=country, email=email, phone=phone, address=address, notes=notes)
     try:
-        client = Prospect(
-            name=(client_d.name if demo else name).strip(), website=website.strip(),
-            city=(client_d.city if demo else p_city).strip(), country=(client_d.country if demo else p_country).strip(),
-            email=email.strip(), phone=phone.strip(), address=address.strip(), notes=notes.strip(),
-        )
         st.session_state["state"] = orchestrator.new_run(offer, client, "demo" if demo else "live")
-    except ValidationError:
-        st.error("Please enter the business name.")
-        return
     except ValueError as exc:
         st.error(str(exc))
         return
