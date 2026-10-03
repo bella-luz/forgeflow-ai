@@ -137,6 +137,18 @@ search       template              (after approval)
 
 **Structured data.** All data passed between stages is a validated Pydantic model. The demo website is rendered from a structured specification through a fixed template, so the language model writes copy, not code.
 
+### User interface
+
+The dashboard is a dark "mission control" interface rather than a chatbot:
+
+- **Landing page:** animated hero, four flip cards introducing the agents, and the seven workflow steps.
+- **Three ways to start:** find potential clients, start from a known client, or demo mode.
+- **Client dashboard:** a header with progress bar, an animated seven-step tracker (done, current, pending), and tabs for Overview, Research, Demo website, Outreach, Client reply, Project PRD and Agent activity.
+- **Evidence cards** with Verified, Likely and Needs review badges and source links; an activity timeline showing every agent action.
+- **Live preview** of the generated website inside the dashboard, with a shareable link and HTML download.
+
+Saved clients can be reopened from the sidebar. Technical service status is kept out of the interface.
+
 ## 8. Tools and technologies
 
 | Purpose | Tool | Cost for the MVP |
@@ -148,7 +160,7 @@ search       template              (after approval)
 | Business listings and maps | OpenStreetMap (Nominatim search, map embed) | Free, open data (ODbL), 1 request per second |
 | Web research | Tavily API | Free tier |
 | Website rendering | Jinja2 template | Free, open source |
-| Email | SMTP (Brevo free plan or any SMTP account) | Free tier |
+| Email | Brevo SMTP relay (free plan; any SMTP account works) | Free tier |
 | Storage | SQLite | Free |
 | Hosting | Streamlit Community Cloud | Free |
 | Source control | GitHub | Free |
@@ -157,7 +169,17 @@ search       template              (after approval)
 
 Framework decision: plain Python, Pydantic and direct HTTP calls. Agent frameworks (CrewAI, LangGraph, AutoGen, Pydantic AI) were considered and not used, because the workflow is a fixed sequence and typed function calls are simpler to test and debug. The application has four runtime dependencies.
 
-Open-source projects studied as references: OpenPage (structured site model), karero/website-builder, LangChain social-media-agent (human-in-the-loop pattern), Browser Use, Hermes Agent. No code was copied from them.
+Open-source projects studied as references, and what was taken from each (ideas only; no code was copied or added as a dependency):
+
+| Project | What it informed |
+|---|---|
+| OpenPage | Generating a site from a structured JSON specification instead of letting the model write HTML |
+| karero/website-builder | Website quality checklist: responsive layout, accessibility, clear calls to action |
+| LangChain social-media-agent | Human-in-the-loop approval before anything is published or sent |
+| Hermes Agent | Separating tools from agents, with typed tool results |
+| Browser Use | Considered for browsing; not needed because search and map data cover the MVP |
+
+These projects are full applications in other stacks (TypeScript, LangGraph). Embedding them would have added large dependencies to a 48-hour Streamlit MVP, so the patterns were reimplemented in a few hundred lines of Python.
 
 ## 9. Finance
 
@@ -206,7 +228,7 @@ These are plans, not validated figures. The first validation step after the hack
 | Agents | Four worker agents visibly participate | Achieved, shown in the activity timeline |
 | Evidence quality | No unsupported claim labelled Verified | Enforced in code and tested |
 | Demo | A real, clickable personalized website | Achieved |
-| Outreach | One human-approved email | Approval gate built; live sending needs SMTP credentials |
+| Outreach | One human-approved email | Achieved: approval gate built and a real email sent through Brevo |
 | Works without keys | Full demo mode | Achieved and tested |
 | Cost | Free tiers only | Achieved |
 
