@@ -104,7 +104,7 @@ def test_app_renders_form_and_full_demo_run():
     assert not at.exception
     assert at.radio[0].value.startswith("Demo")  # no keys, so demo mode is preselected
 
-    next(b for b in at.button if b.label == "Create mission").click().run()
+    next(b for b in at.button if b.label == "Start with this client").click().run()
     assert not at.exception and not at.error
     assert at.session_state["state"].mode == "demo"
 
@@ -114,7 +114,7 @@ def test_app_renders_form_and_full_demo_run():
         assert not at.error, [e.value for e in at.error]
 
     click("Run research")
-    click("Build demo")
+    click("Build demo website")
     click("Draft proposal and email")
     at.checkbox[0].check().run()
     click("Approve and send")
