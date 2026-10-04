@@ -8,6 +8,8 @@ ForgeFlow AI is an agentic workflow for freelancers, students, and small agencie
 
 Instead of stopping at lead generation, ForgeFlow researches a prospect, finds evidence of a real need, builds a personalized website demo, prepares outreach, waits for explicit human approval before sending anything, analyses the customer’s reply, and turns that conversation into structured requirements and a project PRD.
 
+**Live app:** https://forgeflow-ai.streamlit.app
+
 See [MANUAL.md](MANUAL.md) for the user guide and [PRD.md](PRD.md) for the full product requirements document.
 
 ---
@@ -22,6 +24,8 @@ ForgeFlow moves further:
 - **Builds before asking** — the system generates a personalized concept website for the selected business before outreach.
 - **Turns replies into delivery work** — customer feedback becomes structured requirements, acceptance criteria, open questions, and a downloadable PRD.
 - **Keeps the human in control** — no outbound email is sent without explicit approval.
+- **Researched, not reinvented** — the team studied leading open-source projects (OpenPage, LangChain Social Media Agent, Hermes Agent, Pydantic AI, Karero Website Builder, Browser Use) and adapted their strongest patterns into ForgeFlow's own lightweight code.
+- **Zero running cost** — the whole MVP runs on free tiers, backed by 60 automated tests.
 
 ---
 

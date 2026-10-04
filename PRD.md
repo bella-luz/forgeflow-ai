@@ -36,6 +36,15 @@ What you can build
 
 The differentiator is the demo. ForgeFlow does not only find a lead; it builds the thing being sold, for that specific business, before the first contact.
 
+### Why ForgeFlow stands out
+
+- **A complete AI sales team in one app.** Lead tools stop at a list. ForgeFlow covers the whole journey: finding the client, proving the need, building a personalized demo, writing the pitch, reading the reply and delivering a ready-to-build PRD.
+- **It shows instead of tells.** Every pitch arrives with a working website made for that business, in the client's own language.
+- **Trustworthy by design.** Every fact carries its evidence label and source, safeguards are enforced in code and covered by 60 automated tests, and nothing is sent without human approval.
+- **Real businesses, real addresses.** Client search uses map listings with street addresses and sets chains aside.
+- **Production habits from day one.** Typed data between agents, saved state after every step, graceful fallbacks, and a demo mode that runs with no API keys.
+- **Zero running cost.** The entire MVP runs on free tiers.
+
 ## 3. Target users
 
 - Freelance web and app developers
@@ -175,15 +184,16 @@ Saved clients can be reopened from the sidebar. Technical service status is kept
 
 Framework decision: plain Python, Pydantic and direct HTTP calls. Agent frameworks (CrewAI, LangGraph, AutoGen, Pydantic AI) were considered and not used, because the workflow is a fixed sequence and typed function calls are simpler to test and debug. The application has four runtime dependencies.
 
-Open-source projects studied as references, and what was taken from each (ideas only; no code was copied or added as a dependency):
+Rather than rebuild pieces that already exist, the team first researched leading open-source projects and adapted their strongest ideas. The patterns were reimplemented in ForgeFlow's own code (no code was copied and none was added as a dependency):
 
 | Project | What it informed |
 |---|---|
-| OpenPage | Generating a site from a structured JSON specification instead of letting the model write HTML |
-| karero/website-builder | Website quality checklist: responsive layout, accessibility, clear calls to action |
-| LangChain social-media-agent | Human-in-the-loop approval before anything is published or sent |
-| Hermes Agent | Separating tools from agents, with typed tool results |
-| Browser Use | Considered for browsing; not needed because search and map data cover the MVP |
+| OpenPage (github.com/buildingopen/openpage) | Generating a site from a structured JSON specification instead of letting the model write HTML |
+| Website Builder (github.com/karero/website-builder) | Website quality checklist: responsive layout, accessibility, clear calls to action |
+| Social Media Agent (github.com/langchain-ai/social-media-agent) | Human-in-the-loop approval before anything is published or sent |
+| Hermes Agent (github.com/NousResearch/hermes-agent) | Separating tools from agents, with typed tool results |
+| Pydantic AI (github.com/pydantic/pydantic-ai) | Typed, validated outputs from the language model |
+| Browser Use (github.com/browser-use/browser-use) | Research approach for public web data; full browsing was not needed because search and map data cover the MVP |
 
 These projects are full applications in other stacks (TypeScript, LangGraph). Embedding them would have added large dependencies to a 48-hour Streamlit MVP, so the patterns were reimplemented in a few hundred lines of Python.
 
@@ -250,6 +260,26 @@ These are plans, not validated figures. The first validation step after the hack
 - Outreach law differs by country. The MVP sends one human-approved email with identity and opt-out; a compliance layer is needed before any larger volume.
 
 ## 13. Future scope
+
+ForgeFlow's roadmap turns the hackathon MVP into a full AI sales team for builders and agencies.
+
+### Planned tools
+
+These are for after the hackathon. The MVP itself runs entirely on free tiers.
+
+| Next capability | Tool | Cost |
+|---|---|---|
+| Build the final product from the PRD | Claude API with a coding agent | Paid |
+| Richer business data where map coverage is thin | Google Places API | Paid |
+| Verified business contact details | Licensed data provider (for example Hunter.io) | Paid |
+| WhatsApp follow-ups with the client's consent | WhatsApp Business Platform | Paid |
+| Branded email from the team's own domain | Custom domain with Brevo or Resend | Paid |
+| Permanent links for every demo site | Vercel or Netlify hosting | Free tier, paid at scale |
+| Accounts, teams and lasting data | Supabase (Postgres and authentication) | Free tier, paid at scale |
+| Subscriptions and usage analytics | Stripe and PostHog | Transaction fees / free tier |
+
+### Planned features
+
 
 - **Deeper hunting:** rank potential clients by strength of need, run searches continuously, and find contact details from licensed data sources.
 - **More builders:** booking systems, ordering apps, AI customer-service agents, automations.
