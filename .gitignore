@@ -16,3 +16,6 @@ CLAUDE.md
 .claude/
 notes/
 *.docx
+
+# Submission files (shared via Drive)
+submission/

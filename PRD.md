@@ -6,6 +6,12 @@
 
 **Status:** Hackathon MVP (PakAngels GenAI & Agentic AI Training, Cohort 11, final hackathon, 02–04 October 2026)
 
+**Team:** six members (one team leader and five members); names and roles are listed in the submission form.
+
+**Live app:** https://forgeflow-ai.streamlit.app
+
+**Source code:** https://github.com/bella-luz/forgeflow-ai
+
 ## 1. Problem
 
 AI tools have made building software cheap. Freelancers, students, small agencies and no-code builders can now produce a website or an app in hours. The hard part has moved: they can build, but they do not know who will pay for it.
@@ -211,13 +217,13 @@ These are plans, not validated figures. The first validation step after the hack
 
 ## 10. Demo scenario
 
-1. The user enters: "I build professional websites and booking systems for local shops", industry "Mobile phone shops", country "Spain".
-2. The user enters a known prospect, a mobile phone shop in Spain.
+1. The user enters: "I build professional websites and booking systems for local shops", business type "Mobile phone shops", country "Spain", town "Pamplona", language English.
+2. Opportunity Hunter lists the phone shops mapped in Pamplona (16 independent shops in testing, two chains set aside); the user checks one on Google Maps and selects it.
 3. Opportunity Hunter researches it and shows evidence cards with sources.
 4. Builder generates the personalized website; the user opens the shareable link.
 5. Growth & Sales drafts the proposal and email.
 6. The user reviews, edits, ticks approval and sends.
-7. The customer's reply is pasted in: "We like it. Can you also add online booking and a WhatsApp button?"
+7. The customer's reply is pasted in, for example: "Yes, I want the website. Can you also add online booking and a WhatsApp button?"
 8. The reply is analysed and turned into requirements and a PRD.
 
 ## 11. Success criteria
@@ -230,6 +236,7 @@ These are plans, not validated figures. The first validation step after the hack
 | Demo | A real, clickable personalized website | Achieved |
 | Outreach | One human-approved email | Achieved: approval gate built and a real email sent through Brevo |
 | Works without keys | Full demo mode | Achieved and tested |
+| Quality | Automated tests | 60 tests passing, covering failures as well as the happy path |
 | Cost | Free tiers only | Achieved |
 
 ## 12. Risks and limitations
