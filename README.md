@@ -89,7 +89,7 @@ Each worker has a specific objective, receives structured context, uses external
 
 Examples:
 
-- Opportunity Hunter decides what counts as evidence and whether a signal is Verified, Likely, or insufficient.
+- Opportunity Hunter decides what counts as evidence and whether a signal is Verified, Likely, or Needs review.
 - Builder decides how researched facts should become website copy while staying within evidence constraints.
 - Growth & Sales interprets the prospect's response and extracts intent, questions, objections, and requested features.
 - Requirements & Delivery converts conversation evidence into implementation-ready scope.
@@ -174,7 +174,7 @@ Only then can the SMTP tool run.
 
 Without SMTP credentials, the same flow remains available in preview mode and nothing is sent.
 
-Each mission allows at most one successful outbound email.
+Each client allows at most one successful outbound email.
 
 ---
 
@@ -212,27 +212,18 @@ The final PRD is generated in a fixed Markdown structure and can be downloaded.
 
 ```text
                     Streamlit dashboard
-                           │
-                           ▼
-               Deterministic orchestrator
-                           │
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-        ▼                  ▼                  ▼
- Opportunity Hunter      Builder        Growth & Sales
-        │                  │                  │
- OpenStreetMap         Jinja2 HTML         SMTP
- + Tavily              rendering        after approval
-        │                  │                  │
-        └──────────────────┼──────────────────┘
-                           ▼
-                Requirements & Delivery
-                           │
-                           ▼
-                      Markdown PRD
+                 user actions │ ▲ evidence, demo, email, PRD
+                              ▼ │
+                 Deterministic orchestrator ──── SQLite (state saved after every step)
+                              │
+          typed task in,      │      typed result out
+                              ▼
+  1. Opportunity Hunter → 2. Builder → 3. Growth & Sales → 4. Requirements & Delivery
+     OpenStreetMap,         Jinja2        SMTP email,          Markdown PRD
+     Tavily search          template      after approval
 
-Shared intelligence layer: Groq LLM
-Shared state: Pydantic models + SQLite
+  Results are handed on by the orchestrator: research report → website spec → email draft → PRD.
+  Agents never call each other directly. All four use the Groq LLM for structured output.
 ```
 
 ---
@@ -309,7 +300,7 @@ Every external key is optional because the bundled Demo mode works without confi
 4. Add the required values from `.env` under **Advanced settings → Secrets**.
 5. Once deployed, set `APP_BASE_URL` to the public application address.
 
-Storage on Streamlit Community Cloud is temporary. Saved missions and generated demo files may be lost when the app restarts.
+Storage on Streamlit Community Cloud is temporary. Saved clients and generated demo files may be lost when the app restarts.
 
 ---
 
@@ -321,7 +312,7 @@ Storage on Streamlit Community Cloud is temporary. Saved missions and generated 
 
 The test suite runs without credentials and blocks real network and email calls.
 
-Key behaviours covered by the design include:
+The 60 automated tests cover, among other things:
 
 - evidence validation,
 - safe contact handling,
